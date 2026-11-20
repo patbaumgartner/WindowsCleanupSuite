@@ -69,7 +69,35 @@
         @{ Name = 'CtxsDPS'; Reason = 'Citrix Device Posture service (manual unless always required)'; Profile = 'Maximum' },
         @{ Name = 'CWAUpdaterService'; Reason = 'Citrix Workspace updater service'; Profile = 'Maximum' },
         @{ Name = 'Killer Network Service'; Reason = 'Killer suite background service (driver still works)'; Profile = 'Maximum' },
-        @{ Name = 'WSearch'; Reason = 'Windows Search indexing service (maximum performance profile)'; Profile = 'Maximum' }
+        @{ Name = 'WSearch'; Reason = 'Windows Search indexing service (maximum performance profile)'; Profile = 'Maximum' },
+
+        # --- Marvin700 WindowsTweaks_Services additions (Disabled) ---
+        @{ Name = 'WpcMonSvc'; Reason = 'Windows PushToInstall Service (telemetry)'; Profile = 'Balanced' },
+        @{ Name = 'SharedRealitySvc'; Reason = 'Shared Reality Service (telemetry)'; Profile = 'Balanced' },
+        @{ Name = 'autotimesvc'; Reason = 'Auto Time Service'; Profile = 'Balanced' },
+        @{ Name = 'wisvc'; Reason = 'Windows Insiders Service'; Profile = 'Balanced' },
+        @{ Name = 'SDRSVC'; Reason = 'System Restore Service (set point)'; Profile = 'Balanced' },
+        @{ Name = 'MixedRealityOpenXRSvc'; Reason = 'Mixed Reality OpenXR Service'; Profile = 'Balanced' },
+        @{ Name = 'WalletService'; Reason = 'Wallet Service'; Profile = 'Balanced' },
+        @{ Name = 'SmsRouter'; Reason = 'SMS Router Service'; Profile = 'Balanced' },
+        @{ Name = 'MicrosoftEdgeElevationService'; Reason = 'Microsoft Edge Elevation Service'; Profile = 'Balanced' },
+        @{ Name = 'RetailDemo'; Reason = 'Retail Demo Service'; Profile = 'Balanced' },
+        @{ Name = 'MessagingService'; Reason = 'Messaging Service'; Profile = 'Balanced' },
+        @{ Name = 'diagsvc'; Reason = 'Diagnostic Hub Service'; Profile = 'Balanced' },
+        @{ Name = 'WerSvc'; Reason = 'Windows Error Reporting Service'; Profile = 'Balanced' },
+        @{ Name = 'wercplsupport'; Reason = 'Windows Error Reporting Control Panel Help'; Profile = 'Balanced' },
+        @{ Name = 'SEMgrSvc'; Reason = 'SEMgr Service'; Profile = 'Balanced' },
+        @{ Name = 'ScDeviceEnum'; Reason = 'Scanner Device Enumeration Service'; Profile = 'Balanced' },
+        @{ Name = 'TabletInputService'; Reason = 'Tablet Input Service'; Profile = 'Balanced' },
+        @{ Name = 'icssvc'; Reason = 'Internet Connection Sharing Service'; Profile = 'Balanced' },
+        @{ Name = 'OneSyncSvc'; Reason = 'OneSync Service'; Profile = 'Balanced' },
+
+        # --- Marvin700 WindowsTweaks_Services additions (Manual) ---
+        @{ Name = 'BITS'; Reason = 'Background Intelligent Transfer Service (on-demand)'; Profile = 'Balanced' },
+        @{ Name = 'SCardSvr'; Reason = 'Smart Card Service'; Profile = 'Balanced' },
+        @{ Name = 'WbioSrvc'; Reason = 'Windows Biometric Service (fingerprint/facial)'; Profile = 'Balanced' },
+        @{ Name = 'WMPNetworkSvc'; Reason = 'Windows Media Player Network Sharing Service'; Profile = 'Balanced' },
+        @{ Name = 'WpnService'; Reason = 'Windows Push Notification Services (WNS)'; Profile = 'Balanced' }
     )
 
     Tasks = @(
@@ -107,7 +135,23 @@
         @{ Path = '\Microsoft\Office\'; Name = 'Office Telemetry Agent'; Reason = 'Office telemetry agent task'; Profile = 'Maximum' },
         @{ Path = '\Microsoft\Windows\Sustainability\'; Name = 'SustainabilityTelemetry'; Reason = 'Windows sustainability telemetry task'; Profile = 'Maximum' },
         @{ Path = '\Microsoft\Windows\DirectX\'; Name = 'DirectXDatabaseUpdater'; Reason = 'DirectX database updater task'; Profile = 'Maximum' },
-        @{ Path = '\Intel\'; NamePattern = '*'; Reason = 'All non-protected Intel scheduled tasks (Intel DSA* tasks are protected - required for driver updates)'; Profile = 'Maximum' }
+        @{ Path = '\Intel\'; NamePattern = '*'; Reason = 'All non-protected Intel scheduled tasks (Intel DSA* tasks are protected - required for driver updates)'; Profile = 'Maximum' },
+
+        # --- Marvin700 WindowsTweaks_Tasks additions ---
+        @{ Path = '\'; Name = 'Proxy'; Reason = 'Autochk Proxy'; Profile = 'Balanced' },
+        @{ Path = '\'; Name = 'Consolidator'; Reason = 'CEIP Consolidator'; Profile = 'Balanced' },
+        @{ Path = '\'; Name = 'KernelCeipTask'; Reason = 'CEIP KernelCeipTask'; Profile = 'Balanced' },
+        @{ Path = '\'; Name = 'Uploader'; Reason = 'CEIP Uploader'; Profile = 'Balanced' },
+        @{ Path = '\'; Name = 'UsbCeip'; Reason = 'CEIP UsbCeip'; Profile = 'Balanced' },
+        @{ Path = '\Microsoft\Windows\DiskDiagnostic\'; Name = 'Microsoft-Windows-DiskDiagnosticDataCollector'; Reason = 'Disk Diagnostic'; Profile = 'Balanced' },
+        @{ Path = '\Microsoft\Windows\Maps\'; NamePattern = 'MapsToastTask'; Reason = 'Maps Toast'; Profile = 'Balanced' },
+        @{ Path = '\Microsoft\Windows\Maps\'; NamePattern = 'MapsUpdateTask'; Reason = 'Maps Update'; Profile = 'Balanced' },
+        @{ Path = '\Microsoft\Windows\Shell\'; NamePattern = 'FamilySafetyMonitor'; Reason = 'Family Safety Monitor'; Profile = 'Balanced' },
+        @{ Path = '\Microsoft\Windows\Shell\'; NamePattern = 'FamilySafetyRefreshTask'; Reason = 'Family Safety Refresh'; Profile = 'Balanced' },
+        @{ Path = '\Microsoft\Windows\Shell\'; NamePattern = 'FamilySafetyUpload'; Reason = 'Family Safety Upload'; Profile = 'Balanced' },
+        @{ Path = '\Microsoft\Windows\Customer Experience Improvement Program\'; Name = 'FODCleanupTask'; Reason = 'Feature-on-Demand Cleanup Task'; Profile = 'Balanced' },
+        @{ Path = '\Microsoft\Windows\AppCompat\'; Name = 'ProgramDataUpdater'; Reason = 'AppCompat ProgramDataUpdater'; Profile = 'Balanced' },
+        @{ Path = '\Microsoft\Windows\AppCompat\'; Name = 'StartupAppTask'; Reason = 'AppCompat StartupAppTask'; Profile = 'Balanced' }
     )
 
     RunAutoruns = @(

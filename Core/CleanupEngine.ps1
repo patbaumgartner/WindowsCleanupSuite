@@ -23,7 +23,7 @@ function Test-SuiteIsAdmin {
 function Get-SuiteManifest {
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet('StartupBloat', 'WindowsSpeedup')]
+        [ValidateSet('StartupBloat', 'WindowsSpeedup', 'InstalledSoftware', 'WindowsAI', 'TempAndJunkFiles', 'PowerPlan', 'DNSReset')]
         [string]$CleanupName
     )
 
@@ -130,3 +130,4 @@ function Get-RegistryEntryValues {
     }
     return $found
 }
+

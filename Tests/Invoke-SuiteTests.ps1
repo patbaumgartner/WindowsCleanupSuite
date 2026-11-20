@@ -64,8 +64,13 @@ foreach ($file in @(Get-ChildItem -Path $SuiteRoot -Recurse -File -Include '*.ps
 
 # --- 2. Cleanup structure -----------------------------------------------------------
 $expectedCleanups = @(
-    @{ Cleanup = 'StartupBloat';   Manifest = 'Manifest.psd1'; Disable = 'Disable-StartupBloat.ps1';   Restore = 'Restore-StartupBloat.ps1';   Protected = @('*DSA*') },
-    @{ Cleanup = 'WindowsSpeedup'; Manifest = 'Manifest.psd1'; Disable = 'Disable-ServicesAndTasks.ps1'; Restore = 'Restore-ServicesAndTasks.ps1'; Protected = @('*DSA*', '*Driver*Support*') }
+    @{ Cleanup = 'StartupBloat';      Manifest = 'Manifest.psd1'; Disable = 'Disable-StartupBloat.ps1';             Restore = 'Restore-StartupBloat.ps1';             Protected = @('*DSA*') },
+    @{ Cleanup = 'WindowsSpeedup';    Manifest = 'Manifest.psd1'; Disable = 'Disable-ServicesAndTasks.ps1';       Restore = 'Restore-ServicesAndTasks.ps1';       Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'InstalledSoftware'; Manifest = 'Manifest.psd1'; Disable = 'Disable-InstalledSoftware.ps1';      Restore = 'Restore-InstalledSoftware.ps1';      Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'WindowsAI';         Manifest = 'Manifest.psd1'; Disable = 'Disable-WindowsAI.ps1';               Restore = 'Restore-WindowsAI.ps1';               Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'TempAndJunkFiles';  Manifest = 'Manifest.psd1'; Disable = 'Disable-TempAndJunkFiles.ps1';       Restore = 'Restore-TempAndJunkFiles.ps1';       Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'PowerPlan';         Manifest = 'Manifest.psd1'; Disable = 'Enable-UltimatePerformancePlan.ps1'; Restore = 'Restore-PowerPlan.ps1';             Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'DNSReset';          Manifest = 'Manifest.psd1'; Disable = 'Disable-DNSReset.ps1';                Restore = 'Restore-DNSReset.ps1';                Protected = @('*DSA*', '*Driver*Support*') }
 )
 
 foreach ($expected in $expectedCleanups) {
@@ -85,7 +90,15 @@ foreach ($expected in $expectedCleanups) {
         foreach ($p in $expected.Protected) {
             Test-SuiteCheck -Name "Manifest ProtectedPatterns covers '$p'" -Pass (@($manifest.ProtectedPatterns) -contains $p)
         }
-        $entriesKey = if ($expected.Cleanup -eq 'StartupBloat') { 'Targets' } else { 'Services' }
+        $entriesKey = switch ($expected.Cleanup) {
+            'StartupBloat'      { 'Targets' }
+            'InstalledSoftware' { 'Win32Apps' }
+            'WindowsAI'         { 'Entries' }
+            'TempAndJunkFiles'  { 'Directories' }
+            'PowerPlan'         { 'PowerPlans' }
+            'DNSReset'          { 'Commands' }
+            default             { 'Services' }
+        }
         $entries = @($manifest.$entriesKey | Where-Object { $null -ne $_ })
         Test-SuiteCheck -Name "Manifest defines '$entriesKey' ($($entries.Count) entries)" -Pass ($entries.Count -gt 0)
         if ($expected.Cleanup -eq 'WindowsSpeedup') {
@@ -98,7 +111,7 @@ foreach ($expected in $expectedCleanups) {
 }
 
 # --- 3. Runner / audit / engine files --------------------------------------------------
-foreach ($rel in @('Runners\Run-Cleanup.ps1', 'Runners\Run-Monthly.ps1', 'Audit\Audit-State.ps1', 'Tests\Invoke-SuiteTests.ps1', 'Core\CleanupEngine.ps1')) {
+foreach ($rel in @('Runners\Run-Cleanup.ps1', 'Runners\Run-Monthly.ps1', 'Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1', 'Audit\Audit-RunningServices.ps1', 'Audit\Check-SystemHealth.ps1', 'Tests\Invoke-SuiteTests.ps1', 'Core\CleanupEngine.ps1')) {
     Test-SuiteCheck -Name "File exists: $rel" -Pass (Test-Path (Join-Path $SuiteRoot $rel))
 }
 

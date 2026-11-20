@@ -70,8 +70,36 @@ Invoke-SuiteStep -Title "Windows Speedup ($Profile)" -Action {
     }
 }
 
+Invoke-SuiteStep -Title 'Installed Software' -Action {
+    & (Join-Path $SuiteRoot 'Cleanups\InstalledSoftware\Disable-InstalledSoftware.ps1') -WhatIf:$preview
+}
+
+Invoke-SuiteStep -Title 'Windows AI' -Action {
+    & (Join-Path $SuiteRoot 'Cleanups\WindowsAI\Disable-WindowsAI.ps1') -WhatIf:$preview
+}
+
+Invoke-SuiteStep -Title 'Temp And Junk Files' -Action {
+    & (Join-Path $SuiteRoot 'Cleanups\TempAndJunkFiles\Disable-TempAndJunkFiles.ps1') -WhatIf:$preview
+}
+
+Invoke-SuiteStep -Title 'Power Plan' -Action {
+    & (Join-Path $SuiteRoot 'Cleanups\PowerPlan\Enable-UltimatePerformancePlan.ps1') -WhatIf:$preview
+}
+
+Invoke-SuiteStep -Title 'DNS Reset' -Action {
+    & (Join-Path $SuiteRoot 'Cleanups\DNSReset\Disable-DNSReset.ps1') -WhatIf:$preview
+}
+
 Invoke-SuiteStep -Title 'Post-Run Audit' -Action {
     & (Join-Path $SuiteRoot 'Audit\Audit-State.ps1') -Profile $Profile -LoginSafe:$LoginSafe
+}
+
+Invoke-SuiteStep -Title 'Audit: Installed Software' -Action {
+    & (Join-Path $SuiteRoot 'Audit\Audit-InstalledSoftware.ps1')
+}
+
+Invoke-SuiteStep -Title 'Audit: Running Services' -Action {
+    & (Join-Path $SuiteRoot 'Audit\Audit-RunningServices.ps1')
 }
 
 if ($Apply) {
