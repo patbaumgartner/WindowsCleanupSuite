@@ -76,6 +76,7 @@ Write-Host 'Installed-software cleanup (UWP apps)'
 $canAllUsers = Test-SuiteIsAdmin
 foreach ($entry in @($manifest.UwpApps)) {
     $pattern = Get-SuiteEntryLabel -Entry $entry
+    if ($entry.Kept) { Write-Host "  Kept by user request: $pattern"; continue }
     $uwp = @()
     try {
         if ($canAllUsers) {

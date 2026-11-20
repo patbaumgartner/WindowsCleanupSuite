@@ -40,6 +40,7 @@ $bloatware = @()
 foreach ($app in $installed) {
     $match = $null
     foreach ($pattern in @($manifest.UwpApps)) {
+        if ($pattern.Kept) { continue }
         if ($app.Name -like $pattern.NamePattern) { $match = @{ Type = 'UwpApp'; Pattern = $pattern.NamePattern; Reason = $pattern.Reason }; break }
     }
     if (-not $match) {

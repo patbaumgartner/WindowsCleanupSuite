@@ -12,12 +12,17 @@
         @{ Name = 'Signal 8.36.0';               Publisher = 'Signal Messenger, LLC';           Reason = 'Signal secure messenger';      Kept = $true },
         @{ Name = 'Telegram Desktop';            Publisher = 'Telegram FZ-LLC';                 Reason = 'Telegram messenger';           Kept = $true },
         @{ Name = 'Wavebox';                     Publisher = 'The Wavebox Authors';             Reason = 'Wavebox web-apps browser';     Kept = $true },
+        @{ Name = 'PowerToys (Preview) x64';     Publisher = 'Microsoft Corporation';           Reason = 'PowerToys utilities';           Kept = $true },
+        @{ Name = 'TeamViewer';                  Publisher = 'TeamViewer';                      Reason = 'TeamViewer remote desktop';    Kept = $true },
+        @{ Name = 'Dropbox';                     Publisher = 'Dropbox, Inc.';                   Reason = 'Dropbox cloud storage client'; Kept = $true },
         @{ Name = 'Webex VDI Plugin Installer Engine'; Publisher = 'Cisco Systems, Inc';      Reason = 'Cisco Webex VDI plugin' }
     )
 
     # UWP apps: removed via Get-AppxPackage -AllUsers + Remove-AppxProvisionedPackage -Online -AllUsers.
     # Lists based on Marvin700 Remove-BloatwareAppsList.ps1, Raphire Win11Debloat, LeDragoX Win-Debloat-Tools.
     UwpApps = @(
+        # User request: kept - not flagged (Microsoft Teams / MSTeams).
+        @{ NamePattern = 'M*S*Teams';                                 Reason = 'Microsoft Teams (24H2+)'; Kept = $true },
         # --- Marvin700 Remove-BloatwareAppsList.ps1 - Microsoft Apps ---
         @{ NamePattern = 'Microsoft.3DBuilder';                       Reason = '3D Builder' },
         @{ NamePattern = 'Microsoft.549981C3F5F10';                   Reason = 'Cortana' },
