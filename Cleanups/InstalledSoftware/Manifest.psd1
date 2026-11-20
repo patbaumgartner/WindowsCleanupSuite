@@ -7,7 +7,7 @@
 
     # Win32 apps: removed via their UninstallString from the Uninstall registry keys.
     Win32Apps = @(
-        # User request: PowerToys, TeamViewer and Dropbox are kept - not flagged as bloatware.
+        # User request: PowerToys, TeamViewer, Dropbox and MS Teams are kept - not flagged as bloatware.
         @{ Name = 'Discord';                     Publisher = 'Discord Inc';                     Reason = 'Discord voice/chat client' },
         @{ Name = 'Signal 8.36.0';               Publisher = 'Signal Messenger, LLC';           Reason = 'Signal secure messenger' },
         @{ Name = 'Telegram Desktop';            Publisher = 'Telegram FZ-LLC';                Reason = 'Telegram messenger' },
@@ -70,7 +70,7 @@
         # --- Marvin700 Remove-BloatwareAppsList.ps1 - Windows 11 apps ---
         @{ NamePattern = 'Clipchamp.Clipchamp';                       Reason = 'Clipchamp (video editor)' },
         @{ NamePattern = 'Microsoft.OutlookForWindows';                Reason = 'Microsoft Outlook' },
-        @{ NamePattern = 'M*S*Teams';                                 Reason = 'Microsoft Teams (24H2+)' },
+
         @{ NamePattern = 'MicrosoftWindows.Client.WebExperience';     Reason = 'Taskbar Widgets' },
 
         # --- Marvin700 Remove-BloatwareAppsList.ps1 - ThirdPartyApps ---
