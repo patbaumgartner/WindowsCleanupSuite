@@ -1,6 +1,6 @@
 {
-  "Reason": "Scanner Device Enumeration Service",
-  "Name": "ScDeviceEnum",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "ScDeviceEnum",
+  "Reason": "Scanner Device Enumeration Service"
 }

@@ -1,6 +1,6 @@
 {
-  "Reason": "Phone Link background service",
-  "Name": "PhoneSvc",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "PhoneSvc",
+  "Reason": "Phone Link background service"
 }

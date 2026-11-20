@@ -1,6 +1,6 @@
 {
-  "Reason": "Device management WAP push routing service",
-  "Name": "dmwappushservice",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 2,
+  "Name": "dmwappushservice",
+  "Reason": "Device management WAP push routing service"
 }

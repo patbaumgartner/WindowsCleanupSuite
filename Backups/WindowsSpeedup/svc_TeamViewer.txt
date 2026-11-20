@@ -1,6 +1,6 @@
 {
-  "Reason": "TeamViewer always-on background service",
-  "Name": "TeamViewer",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "TeamViewer",
+  "Reason": "TeamViewer always-on background service"
 }

@@ -1,6 +1,6 @@
 {
-  "Reason": "Smart Card Service",
-  "Name": "SCardSvr",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "SCardSvr",
+  "Reason": "Smart Card Service"
 }

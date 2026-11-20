@@ -1,8 +1,8 @@
 {
-  "TaskPath": "\\",
-  "Enabled": false,
-  "TaskName": "MicrosoftEdgeUpdateTaskMachineUA{2AE50CCF-34C1-45ED-807F-7752E5227DE5}",
   "State": 1,
   "Reason": "Microsoft Edge updater task",
-  "Type": "Task"
+  "Type": "Task",
+  "Enabled": false,
+  "TaskName": "MicrosoftEdgeUpdateTaskMachineUA{2AE50CCF-34C1-45ED-807F-7752E5227DE5}",
+  "TaskPath": "\\"
 }

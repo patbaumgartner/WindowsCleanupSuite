@@ -1,6 +1,6 @@
 {
-  "Reason": "Messaging Service",
-  "Name": "MessagingService",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "MessagingService",
+  "Reason": "Messaging Service"
 }

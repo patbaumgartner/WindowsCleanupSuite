@@ -1,8 +1,8 @@
 {
   "PreviousValue": 3,
   "Reason": "Disable WSAIFabricSvc (AI/analytics service) - needs restart",
-  "Name": "Start",
+  "Type": "Registry",
   "NewValue": 3,
   "RegistryKey": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\WSAIFabricSvc",
-  "Type": "Registry"
+  "Name": "Start"
 }

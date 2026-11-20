@@ -1,8 +1,8 @@
 {
-  "PreviousValue": null,
+  "PreviousValue": 2,
   "Reason": "Disable Chrome AI theme creation",
-  "Name": "CreateThemesSettings",
+  "Type": "Registry",
   "NewValue": 2,
   "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
-  "Type": "Registry"
+  "Name": "CreateThemesSettings"
 }

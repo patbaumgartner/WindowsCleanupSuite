@@ -1,6 +1,6 @@
 {
-  "Reason": "Logitech sync helper service",
-  "Name": "LogiSyncStub",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "LogiSyncStub",
+  "Reason": "Logitech sync helper service"
 }

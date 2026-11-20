@@ -1,8 +1,8 @@
 {
   "PreviousValue": 1,
   "Reason": "Disable Paint AI Cocreator",
-  "Name": "DisableCocreator",
+  "Type": "Registry",
   "NewValue": 1,
   "RegistryKey": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Paint",
-  "Type": "Registry"
+  "Name": "DisableCocreator"
 }

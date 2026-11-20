@@ -1,8 +1,8 @@
 {
-  "PreviousValue": null,
+  "PreviousValue": 1,
   "Reason": "Disable Chrome smart tab sharing",
-  "Name": "SmartTabSharingSettings",
+  "Type": "Registry",
   "NewValue": 1,
   "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
-  "Type": "Registry"
+  "Name": "SmartTabSharingSettings"
 }

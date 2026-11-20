@@ -1,6 +1,6 @@
 {
-  "Reason": "OneSync Service",
-  "Name": "OneSyncSvc",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "OneSyncSvc",
+  "Reason": "OneSync Service"
 }

@@ -1,8 +1,8 @@
 {
-  "PreviousValue": null,
+  "PreviousValue": 2,
   "Reason": "Disable Chrome DevTools GenAI",
-  "Name": "DevToolsGenAiSettings",
+  "Type": "Registry",
   "NewValue": 2,
   "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
-  "Type": "Registry"
+  "Name": "DevToolsGenAiSettings"
 }

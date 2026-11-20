@@ -1,6 +1,6 @@
 {
-  "Reason": "Dell Fusion background service",
-  "Name": "FusionService",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "FusionService",
+  "Reason": "Dell Fusion background service"
 }

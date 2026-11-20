@@ -1,8 +1,8 @@
 {
-  "PreviousValue": null,
+  "PreviousValue": 0,
   "Reason": "Disable Microsoft 365 Copilot chat icon (Edge)",
-  "Name": "Microsoft365CopilotChatIconEnabled",
+  "Type": "Registry",
   "NewValue": 0,
   "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-  "Type": "Registry"
+  "Name": "Microsoft365CopilotChatIconEnabled"
 }

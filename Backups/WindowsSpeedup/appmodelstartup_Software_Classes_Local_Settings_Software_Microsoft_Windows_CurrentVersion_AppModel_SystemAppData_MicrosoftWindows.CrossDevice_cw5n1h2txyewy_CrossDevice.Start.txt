@@ -1,9 +1,9 @@
 {
-  "LastDisabledTime": "1776804494",
-  "Reason": "Mobile devices cross-device startup task",
-  "Name": "State",
-  "State": 1,
-  "UserEnabledStartupOnce": "",
   "Path": "HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\MicrosoftWindows.CrossDevice_cw5n1h2txyewy\\CrossDevice.Start",
-  "Type": "AppModelStartup"
+  "State": 1,
+  "Type": "AppModelStartup",
+  "Reason": "Mobile devices cross-device startup task",
+  "LastDisabledTime": "1776804494",
+  "Name": "State",
+  "UserEnabledStartupOnce": ""
 }

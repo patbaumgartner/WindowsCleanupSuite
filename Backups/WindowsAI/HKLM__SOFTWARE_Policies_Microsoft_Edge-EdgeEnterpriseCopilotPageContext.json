@@ -1,8 +1,8 @@
 {
-  "PreviousValue": null,
+  "PreviousValue": 0,
   "Reason": "Disable enterprise Copilot page context (Edge)",
-  "Name": "EdgeEnterpriseCopilotPageContext",
+  "Type": "Registry",
   "NewValue": 0,
   "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-  "Type": "Registry"
+  "Name": "EdgeEnterpriseCopilotPageContext"
 }

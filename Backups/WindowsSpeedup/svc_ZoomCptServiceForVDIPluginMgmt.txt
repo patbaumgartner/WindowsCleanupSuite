@@ -1,6 +1,6 @@
 {
-  "Reason": "Zoom VDI Plugin Management",
-  "Name": "ZoomCptServiceForVDIPluginMgmt",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "ZoomCptServiceForVDIPluginMgmt",
+  "Reason": "Zoom VDI Plugin Management"
 }

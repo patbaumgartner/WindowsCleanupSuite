@@ -1,8 +1,8 @@
 {
-  "PreviousValue": null,
+  "PreviousValue": 0,
   "Reason": "Disable Windows Recall (Windows 11 24H2+)",
-  "Name": "AllowRecall",
+  "Type": "Registry",
   "NewValue": 0,
   "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsAI",
-  "Type": "Registry"
+  "Name": "AllowRecall"
 }

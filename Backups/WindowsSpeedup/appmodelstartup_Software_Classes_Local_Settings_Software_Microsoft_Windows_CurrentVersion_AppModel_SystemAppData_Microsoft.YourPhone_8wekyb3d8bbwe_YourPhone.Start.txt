@@ -1,9 +1,9 @@
 {
-  "LastDisabledTime": "1776804501",
-  "Reason": "Phone Link startup task",
-  "Name": "State",
-  "State": 1,
-  "UserEnabledStartupOnce": "1",
   "Path": "HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\Microsoft.YourPhone_8wekyb3d8bbwe\\YourPhone.Start",
-  "Type": "AppModelStartup"
+  "State": 1,
+  "Type": "AppModelStartup",
+  "Reason": "Phone Link startup task",
+  "LastDisabledTime": "1776804501",
+  "Name": "State",
+  "UserEnabledStartupOnce": "1"
 }

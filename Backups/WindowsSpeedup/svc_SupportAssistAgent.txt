@@ -1,6 +1,6 @@
 {
-  "Reason": "Dell SupportAssist agent",
-  "Name": "SupportAssistAgent",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "SupportAssistAgent",
+  "Reason": "Dell SupportAssist agent"
 }

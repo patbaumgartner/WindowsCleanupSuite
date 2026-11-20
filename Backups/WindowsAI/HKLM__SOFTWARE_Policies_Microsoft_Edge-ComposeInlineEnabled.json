@@ -1,8 +1,8 @@
 {
   "PreviousValue": 0,
   "Reason": "Disable inline AI compose (Edge)",
-  "Name": "ComposeInlineEnabled",
+  "Type": "Registry",
   "NewValue": 0,
   "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-  "Type": "Registry"
+  "Name": "ComposeInlineEnabled"
 }

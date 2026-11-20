@@ -1,8 +1,8 @@
 {
-  "TaskPath": "\\Microsoft\\Windows\\Maps\\",
-  "Enabled": false,
-  "TaskName": "MapsUpdateTask",
   "State": 1,
   "Reason": "Maps Update",
-  "Type": "Task"
+  "Type": "Task",
+  "Enabled": false,
+  "TaskName": "MapsUpdateTask",
+  "TaskPath": "\\Microsoft\\Windows\\Maps\\"
 }

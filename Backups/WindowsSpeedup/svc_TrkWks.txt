@@ -1,6 +1,6 @@
 {
-  "Reason": "Distributed link tracking client",
-  "Name": "TrkWks",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "TrkWks",
+  "Reason": "Distributed link tracking client"
 }

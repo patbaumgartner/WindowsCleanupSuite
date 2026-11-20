@@ -1,6 +1,6 @@
 {
-  "Reason": "Dell TechHub",
-  "Name": "DellTechHub",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "DellTechHub",
+  "Reason": "Dell TechHub"
 }

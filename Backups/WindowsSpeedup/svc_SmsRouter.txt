@@ -1,6 +1,6 @@
 {
-  "Reason": "SMS Router Service",
-  "Name": "SmsRouter",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "SmsRouter",
+  "Reason": "SMS Router Service"
 }

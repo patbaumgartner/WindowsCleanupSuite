@@ -1,6 +1,6 @@
 {
-  "Reason": "Background Intelligent Transfer Service (on-demand)",
-  "Name": "BITS",
   "Type": "Service",
-  "StartType": 2
+  "StartType": 3,
+  "Name": "BITS",
+  "Reason": "Background Intelligent Transfer Service (on-demand)"
 }

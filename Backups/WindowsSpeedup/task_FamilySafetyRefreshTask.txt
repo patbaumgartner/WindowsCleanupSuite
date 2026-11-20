@@ -1,8 +1,8 @@
 {
-  "TaskPath": "\\Microsoft\\Windows\\Shell\\",
-  "Enabled": false,
-  "TaskName": "FamilySafetyRefreshTask",
   "State": 1,
   "Reason": "Family Safety Refresh",
-  "Type": "Task"
+  "Type": "Task",
+  "Enabled": false,
+  "TaskName": "FamilySafetyRefreshTask",
+  "TaskPath": "\\Microsoft\\Windows\\Shell\\"
 }

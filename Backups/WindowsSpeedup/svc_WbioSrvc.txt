@@ -1,6 +1,6 @@
 {
-  "Reason": "Windows Biometric Service (fingerprint/facial)",
-  "Name": "WbioSrvc",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 2,
+  "Name": "WbioSrvc",
+  "Reason": "Windows Biometric Service (fingerprint/facial)"
 }

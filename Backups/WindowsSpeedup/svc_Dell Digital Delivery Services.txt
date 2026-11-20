@@ -1,6 +1,6 @@
 {
-  "Reason": "Dell Digital Delivery Services",
-  "Name": "Dell Digital Delivery Services",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "Dell Digital Delivery Services",
+  "Reason": "Dell Digital Delivery Services"
 }

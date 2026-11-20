@@ -1,6 +1,6 @@
 {
-  "Reason": "Retail Demo Service",
-  "Name": "RetailDemo",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "RetailDemo",
+  "Reason": "Retail Demo Service"
 }

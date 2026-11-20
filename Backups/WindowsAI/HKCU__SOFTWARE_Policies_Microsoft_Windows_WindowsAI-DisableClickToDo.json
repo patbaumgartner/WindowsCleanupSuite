@@ -1,8 +1,8 @@
 {
   "PreviousValue": 1,
   "Reason": "Disable Click to Do (current user)",
-  "Name": "DisableClickToDo",
+  "Type": "Registry",
   "NewValue": 1,
   "RegistryKey": "HKCU:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsAI",
-  "Type": "Registry"
+  "Name": "DisableClickToDo"
 }

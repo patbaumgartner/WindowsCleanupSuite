@@ -1,6 +1,6 @@
 {
-  "Reason": "Downloaded maps manager",
-  "Name": "MapsBroker",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "MapsBroker",
+  "Reason": "Downloaded maps manager"
 }

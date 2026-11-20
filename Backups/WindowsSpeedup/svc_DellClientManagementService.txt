@@ -1,6 +1,6 @@
 {
-  "Reason": "Dell Client Management Service",
-  "Name": "DellClientManagementService",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "DellClientManagementService",
+  "Reason": "Dell Client Management Service"
 }

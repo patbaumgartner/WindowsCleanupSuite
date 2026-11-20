@@ -1,6 +1,6 @@
 {
-  "Reason": "Data usage monitoring service",
-  "Name": "DusmSvc",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "DusmSvc",
+  "Reason": "Data usage monitoring service"
 }

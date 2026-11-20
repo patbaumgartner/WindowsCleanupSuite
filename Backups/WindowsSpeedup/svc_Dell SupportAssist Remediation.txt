@@ -1,6 +1,6 @@
 {
-  "Reason": "Dell SupportAssist Remediation",
-  "Name": "Dell SupportAssist Remediation",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "Dell SupportAssist Remediation",
+  "Reason": "Dell SupportAssist Remediation"
 }

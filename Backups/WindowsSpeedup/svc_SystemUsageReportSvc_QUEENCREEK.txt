@@ -1,6 +1,6 @@
 {
-  "Reason": "Intel System Usage Report (telemetry)",
-  "Name": "SystemUsageReportSvc_QUEENCREEK",
   "Type": "Service",
-  "StartType": 3
+  "StartType": 3,
+  "Name": "SystemUsageReportSvc_QUEENCREEK",
+  "Reason": "Intel System Usage Report (telemetry)"
 }

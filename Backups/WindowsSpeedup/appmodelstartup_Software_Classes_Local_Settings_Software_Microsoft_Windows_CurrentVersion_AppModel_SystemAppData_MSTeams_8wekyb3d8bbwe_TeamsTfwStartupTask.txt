@@ -1,9 +1,9 @@
 {
-  "LastDisabledTime": "",
-  "Reason": "New Teams startup task",
-  "Name": "State",
-  "State": 1,
-  "UserEnabledStartupOnce": "",
   "Path": "HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\MSTeams_8wekyb3d8bbwe\\TeamsTfwStartupTask",
-  "Type": "AppModelStartup"
+  "State": 2,
+  "Type": "AppModelStartup",
+  "Reason": "New Teams startup task",
+  "LastDisabledTime": "",
+  "Name": "State",
+  "UserEnabledStartupOnce": ""
 }
