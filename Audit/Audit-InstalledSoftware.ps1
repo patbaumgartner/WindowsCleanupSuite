@@ -43,7 +43,7 @@ foreach ($app in $installed) {
         if ($app.Name -like $pattern.NamePattern) { $match = @{ Type = 'UwpApp'; Pattern = $pattern.NamePattern; Reason = $pattern.Reason }; break }
     }
     if (-not $match) {
-        foreach ($w32 in @($manifest.Win32Apps)) {
+        foreach ($w32 in @($manifest.Win32Apps | Where-Object { $null -eq $_.Kept })) {
             if ($app.Name -eq $w32.Name) { $match = @{ Type = 'Win32App'; Pattern = $w32.Name; Reason = $w32.Reason }; break }
         }
     }

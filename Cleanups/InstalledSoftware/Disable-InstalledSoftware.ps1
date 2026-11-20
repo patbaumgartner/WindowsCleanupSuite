@@ -32,6 +32,7 @@ Write-Host 'Installed-software cleanup (Win32 apps)'
 $uninstallKeys = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall')
 
 foreach ($entry in @($manifest.Win32Apps)) {
+    if ($entry.Kept) { Write-Host "  Kept by user request: $($entry.Name)"; continue }
     if (-not $PSCmdlet.ShouldProcess($entry.Name, "Remove Win32 app via uninstaller")) {
         Write-Host "  Would remove Win32 app: $($entry.Name)"
         continue

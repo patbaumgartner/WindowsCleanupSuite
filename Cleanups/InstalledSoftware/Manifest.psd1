@@ -7,11 +7,11 @@
 
     # Win32 apps: removed via their UninstallString from the Uninstall registry keys.
     Win32Apps = @(
-        # User request: PowerToys, TeamViewer, Dropbox and MS Teams are kept - not flagged as bloatware.
-        @{ Name = 'Discord';                     Publisher = 'Discord Inc';                     Reason = 'Discord voice/chat client' },
-        @{ Name = 'Signal 8.36.0';               Publisher = 'Signal Messenger, LLC';           Reason = 'Signal secure messenger' },
-        @{ Name = 'Telegram Desktop';            Publisher = 'Telegram FZ-LLC';                Reason = 'Telegram messenger' },
-        @{ Name = 'Wavebox';                     Publisher = 'The Wavebox Authors';            Reason = 'Wavebox web-apps browser' },
+        # User request: keep these - not flagged as bloatware (Discord, Signal, Telegram, Wavebox, PowerToys, TeamViewer, Dropbox, MS Teams).
+        @{ Name = 'Discord';                     Publisher = 'Discord Inc';                     Reason = 'Discord voice/chat client';   Kept = $true },
+        @{ Name = 'Signal 8.36.0';               Publisher = 'Signal Messenger, LLC';           Reason = 'Signal secure messenger';      Kept = $true },
+        @{ Name = 'Telegram Desktop';            Publisher = 'Telegram FZ-LLC';                 Reason = 'Telegram messenger';           Kept = $true },
+        @{ Name = 'Wavebox';                     Publisher = 'The Wavebox Authors';             Reason = 'Wavebox web-apps browser';     Kept = $true },
         @{ Name = 'Webex VDI Plugin Installer Engine'; Publisher = 'Cisco Systems, Inc';      Reason = 'Cisco Webex VDI plugin' }
     )
 
