@@ -1,0 +1,8 @@
+{
+  "TaskPath": "\\Mozilla\\",
+  "Enabled": false,
+  "TaskName": "Firefox Background Update 308046B0AF4A39CB",
+  "State": 1,
+  "Reason": "Firefox background updater",
+  "Type": "Task"
+}

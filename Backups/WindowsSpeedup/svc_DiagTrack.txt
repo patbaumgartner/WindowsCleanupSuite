@@ -1,0 +1,6 @@
+{
+  "Reason": "Microsoft Connected User Experiences and Telemetry",
+  "Name": "DiagTrack",
+  "Type": "Service",
+  "StartType": 3
+}

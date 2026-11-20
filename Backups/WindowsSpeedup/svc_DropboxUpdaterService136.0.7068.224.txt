@@ -1,0 +1,6 @@
+{
+  "Reason": "Dropbox updater service",
+  "Name": "DropboxUpdaterService136.0.7068.224",
+  "Type": "Service",
+  "StartType": 3
+}

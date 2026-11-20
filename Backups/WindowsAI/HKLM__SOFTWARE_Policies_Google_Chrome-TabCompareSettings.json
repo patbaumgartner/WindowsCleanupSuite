@@ -1,0 +1,8 @@
+{
+  "PreviousValue": null,
+  "Reason": "Disable Chrome tab compare AI",
+  "Name": "TabCompareSettings",
+  "NewValue": 2,
+  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
+  "Type": "Registry"
+}

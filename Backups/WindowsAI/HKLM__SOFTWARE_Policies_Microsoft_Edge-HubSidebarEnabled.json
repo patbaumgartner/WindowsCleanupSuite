@@ -1,0 +1,8 @@
+{
+  "PreviousValue": null,
+  "Reason": "Disable Copilot sidebar (Edge)",
+  "Name": "HubSidebarEnabled",
+  "NewValue": 0,
+  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
+  "Type": "Registry"
+}

@@ -1,0 +1,6 @@
+{
+  "Reason": "Intel Dynamic Tuning Technology Telemetry",
+  "Name": "dptftcs",
+  "Type": "Service",
+  "StartType": 3
+}

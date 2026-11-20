@@ -1,0 +1,8 @@
+{
+  "PreviousValue": 1,
+  "Reason": "Disable Paint AI generative erase",
+  "Name": "DisableGenerativeErase",
+  "NewValue": 1,
+  "RegistryKey": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Paint",
+  "Type": "Registry"
+}

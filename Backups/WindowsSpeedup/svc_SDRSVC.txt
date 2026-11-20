@@ -1,0 +1,6 @@
+{
+  "Reason": "System Restore Service (set point)",
+  "Name": "SDRSVC",
+  "Type": "Service",
+  "StartType": 3
+}

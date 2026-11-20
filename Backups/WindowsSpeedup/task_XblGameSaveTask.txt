@@ -1,0 +1,8 @@
+{
+  "TaskPath": "\\Microsoft\\XblGameSave\\",
+  "Enabled": false,
+  "TaskName": "XblGameSaveTask",
+  "State": 1,
+  "Reason": "Xbox game save sync",
+  "Type": "Task"
+}

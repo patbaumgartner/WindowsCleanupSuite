@@ -1,0 +1,6 @@
+{
+  "Reason": "Auto Time Service",
+  "Name": "autotimesvc",
+  "Type": "Service",
+  "StartType": 3
+}

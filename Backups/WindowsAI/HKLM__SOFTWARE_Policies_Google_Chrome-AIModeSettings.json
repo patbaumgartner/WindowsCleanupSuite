@@ -1,0 +1,8 @@
+{
+  "PreviousValue": null,
+  "Reason": "Disable Chrome AI mode settings",
+  "Name": "AIModeSettings",
+  "NewValue": 1,
+  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
+  "Type": "Registry"
+}

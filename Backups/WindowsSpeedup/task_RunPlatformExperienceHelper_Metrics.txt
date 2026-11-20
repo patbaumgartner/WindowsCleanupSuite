@@ -1,0 +1,8 @@
+{
+  "TaskPath": "\\GoogleUserPEH\\",
+  "Enabled": false,
+  "TaskName": "RunPlatformExperienceHelper_Metrics",
+  "State": 1,
+  "Reason": "Google platform experience helper metrics",
+  "Type": "Task"
+}

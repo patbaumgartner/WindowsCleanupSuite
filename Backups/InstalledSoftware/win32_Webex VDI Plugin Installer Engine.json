@@ -1,0 +1,105 @@
+{
+  "Publisher": "Cisco Systems, Inc",
+  "Values": [
+    {
+      "Name": "AuthorizedCDFPrefix",
+      "Value": ""
+    },
+    {
+      "Name": "Comments",
+      "Value": ""
+    },
+    {
+      "Name": "Contact",
+      "Value": ""
+    },
+    {
+      "Name": "DisplayVersion",
+      "Value": "3.1.0.24263"
+    },
+    {
+      "Name": "HelpLink",
+      "Value": ""
+    },
+    {
+      "Name": "HelpTelephone",
+      "Value": ""
+    },
+    {
+      "Name": "InstallDate",
+      "Value": "20250701"
+    },
+    {
+      "Name": "InstallLocation",
+      "Value": "C:\\Program Files\\Cisco Teams VDI Client\\"
+    },
+    {
+      "Name": "InstallSource",
+      "Value": "C:\\WINDOWS\\SysWOW64\\config\\systemprofile\\Citrix\\UpdaterBinaries\\CitrixReceiver\\"
+    },
+    {
+      "Name": "ModifyPath",
+      "Value": "MsiExec.exe /X{F22AFF95-C27A-455F-9E1A-AEBA97B2A2FD}"
+    },
+    {
+      "Name": "NoModify",
+      "Value": 1
+    },
+    {
+      "Name": "Publisher",
+      "Value": "Cisco Systems, Inc"
+    },
+    {
+      "Name": "Readme",
+      "Value": ""
+    },
+    {
+      "Name": "Size",
+      "Value": ""
+    },
+    {
+      "Name": "EstimatedSize",
+      "Value": 23686
+    },
+    {
+      "Name": "UninstallString",
+      "Value": "MsiExec.exe /X{F22AFF95-C27A-455F-9E1A-AEBA97B2A2FD}"
+    },
+    {
+      "Name": "URLInfoAbout",
+      "Value": ""
+    },
+    {
+      "Name": "URLUpdateInfo",
+      "Value": ""
+    },
+    {
+      "Name": "VersionMajor",
+      "Value": 3
+    },
+    {
+      "Name": "VersionMinor",
+      "Value": 1
+    },
+    {
+      "Name": "WindowsInstaller",
+      "Value": 1
+    },
+    {
+      "Name": "Version",
+      "Value": 50397184
+    },
+    {
+      "Name": "Language",
+      "Value": 0
+    },
+    {
+      "Name": "DisplayName",
+      "Value": "Webex VDI Plugin Installer Engine"
+    }
+  ],
+  "UninstallString": "MsiExec.exe /X{F22AFF95-C27A-455F-9E1A-AEBA97B2A2FD}",
+  "RegKeyPath": "Microsoft.PowerShell.Core\\Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{F22AFF95-C27A-455F-9E1A-AEBA97B2A2FD}",
+  "Name": "Webex VDI Plugin Installer Engine",
+  "Type": "Win32"
+}

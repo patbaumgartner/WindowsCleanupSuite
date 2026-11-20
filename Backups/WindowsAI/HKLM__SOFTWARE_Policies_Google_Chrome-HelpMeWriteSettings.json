@@ -1,0 +1,8 @@
+{
+  "PreviousValue": null,
+  "Reason": "Disable Chrome help-me-write AI",
+  "Name": "HelpMeWriteSettings",
+  "NewValue": 2,
+  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
+  "Type": "Registry"
+}

@@ -1,0 +1,6 @@
+{
+  "Reason": "Killer Network Analytics",
+  "Name": "Killer Analytics Service",
+  "Type": "Service",
+  "StartType": 3
+}

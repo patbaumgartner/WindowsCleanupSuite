@@ -1,0 +1,6 @@
+{
+  "Reason": "Killer Provider Data Helper",
+  "Name": "Killer Provider Data Helper Service",
+  "Type": "Service",
+  "StartType": 3
+}

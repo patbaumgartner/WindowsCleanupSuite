@@ -1,0 +1,6 @@
+{
+  "Reason": "OneSync Service",
+  "Name": "OneSyncSvc",
+  "Type": "Service",
+  "StartType": 3
+}

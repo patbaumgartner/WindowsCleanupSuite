@@ -1,0 +1,8 @@
+{
+  "PreviousValue": 1,
+  "Reason": "Disable Paint AI generative fill",
+  "Name": "DisableGenerativeFill",
+  "NewValue": 1,
+  "RegistryKey": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Paint",
+  "Type": "Registry"
+}

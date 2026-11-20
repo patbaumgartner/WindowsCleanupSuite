@@ -1,0 +1,107 @@
+{
+  "Publisher": "Microsoft Corporation",
+  "Values": [
+    {
+      "Name": "BundleCachePath",
+      "Value": "C:\\ProgramData\\Package Cache\\{D324162D-1B7B-4245-A200-7F7EF7756930}\\PowerToysSetup-0.102.3101.0-x64.exe"
+    },
+    {
+      "Name": "BundleUpgradeCode",
+      "Value": [
+        "{6341382D-C0A9-4238-9188-BE9607E3FAB2}"
+      ]
+    },
+    {
+      "Name": "BundleAddonCode",
+      "Value": []
+    },
+    {
+      "Name": "BundleDetectCode",
+      "Value": []
+    },
+    {
+      "Name": "BundlePatchCode",
+      "Value": []
+    },
+    {
+      "Name": "BundleVersion",
+      "Value": "0.102.3101.0"
+    },
+    {
+      "Name": "VersionMajor",
+      "Value": 0
+    },
+    {
+      "Name": "VersionMinor",
+      "Value": 102
+    },
+    {
+      "Name": "BundleProviderKey",
+      "Value": "{D324162D-1B7B-4245-A200-7F7EF7756930}"
+    },
+    {
+      "Name": "BundleTag",
+      "Value": ""
+    },
+    {
+      "Name": "EngineVersion",
+      "Value": "5.0.2.0"
+    },
+    {
+      "Name": "EngineProtocolVersion",
+      "Value": 1
+    },
+    {
+      "Name": "DisplayIcon",
+      "Value": "C:\\ProgramData\\Package Cache\\{D324162D-1B7B-4245-A200-7F7EF7756930}\\PowerToysSetup-0.102.3101.0-x64.exe,0"
+    },
+    {
+      "Name": "DisplayName",
+      "Value": "PowerToys (Preview) x64"
+    },
+    {
+      "Name": "DisplayVersion",
+      "Value": "0.102.3101.0"
+    },
+    {
+      "Name": "Publisher",
+      "Value": "Microsoft Corporation"
+    },
+    {
+      "Name": "ModifyPath",
+      "Value": "\"C:\\ProgramData\\Package Cache\\{D324162D-1B7B-4245-A200-7F7EF7756930}\\PowerToysSetup-0.102.3101.0-x64.exe\" /modify"
+    },
+    {
+      "Name": "NoElevateOnModify",
+      "Value": 1
+    },
+    {
+      "Name": "QuietUninstallString",
+      "Value": "\"C:\\ProgramData\\Package Cache\\{D324162D-1B7B-4245-A200-7F7EF7756930}\\PowerToysSetup-0.102.3101.0-x64.exe\" /uninstall /quiet"
+    },
+    {
+      "Name": "UninstallString",
+      "Value": "\"C:\\ProgramData\\Package Cache\\{D324162D-1B7B-4245-A200-7F7EF7756930}\\PowerToysSetup-0.102.3101.0-x64.exe\"  /uninstall"
+    },
+    {
+      "Name": "InstallDate",
+      "Value": "20261107"
+    },
+    {
+      "Name": "EstimatedSize",
+      "Value": 1372134
+    },
+    {
+      "Name": "Resume",
+      "Value": 3
+    },
+    {
+      "Name": "Installed",
+      "Value": 1
+    }
+  ],
+  "UninstallString": "\"C:\\ProgramData\\Package Cache\\{D324162D-1B7B-4245-A200-7F7EF7756930}\\PowerToysSetup-0.102.3101.0-x64.exe\"  /uninstall",
+  "RegKeyPath": "Microsoft.PowerShell.Core\\Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{D324162D-1B7B-4245-A200-7F7EF7756930}",
+  "Name": "PowerToys (Preview) x64",
+  "Type": "Win32"
+}

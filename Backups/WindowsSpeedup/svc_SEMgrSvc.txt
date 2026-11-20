@@ -1,0 +1,6 @@
+{
+  "Reason": "SEMgr Service",
+  "Name": "SEMgrSvc",
+  "Type": "Service",
+  "StartType": 3
+}

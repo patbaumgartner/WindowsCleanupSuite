@@ -1,0 +1,6 @@
+{
+  "Reason": "Dell Pair Service",
+  "Name": "DellPairService",
+  "Type": "Service",
+  "StartType": 3
+}

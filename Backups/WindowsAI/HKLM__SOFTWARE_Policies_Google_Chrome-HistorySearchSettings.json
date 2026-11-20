@@ -1,0 +1,8 @@
+{
+  "PreviousValue": null,
+  "Reason": "Disable Chrome history search AI",
+  "Name": "HistorySearchSettings",
+  "NewValue": 2,
+  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
+  "Type": "Registry"
+}

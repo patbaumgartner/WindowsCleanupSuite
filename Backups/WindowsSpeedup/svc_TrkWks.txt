@@ -1,0 +1,6 @@
+{
+  "Reason": "Distributed link tracking client",
+  "Name": "TrkWks",
+  "Type": "Service",
+  "StartType": 3
+}

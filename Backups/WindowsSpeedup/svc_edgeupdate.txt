@@ -1,0 +1,6 @@
+{
+  "Reason": "Microsoft Edge updater service",
+  "Name": "edgeupdate",
+  "Type": "Service",
+  "StartType": 3
+}

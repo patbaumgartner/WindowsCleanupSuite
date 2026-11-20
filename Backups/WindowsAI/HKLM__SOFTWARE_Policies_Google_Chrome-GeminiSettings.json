@@ -1,0 +1,8 @@
+{
+  "PreviousValue": null,
+  "Reason": "Disable Chrome Gemini",
+  "Name": "GeminiSettings",
+  "NewValue": 1,
+  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
+  "Type": "Registry"
+}

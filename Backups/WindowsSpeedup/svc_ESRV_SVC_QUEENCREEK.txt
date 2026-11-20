@@ -1,0 +1,6 @@
+{
+  "Reason": "Intel Energy Server Service (telemetry)",
+  "Name": "ESRV_SVC_QUEENCREEK",
+  "Type": "Service",
+  "StartType": 3
+}

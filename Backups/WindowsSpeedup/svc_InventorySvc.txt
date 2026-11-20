@@ -1,0 +1,6 @@
+{
+  "Reason": "Windows compatibility inventory service",
+  "Name": "InventorySvc",
+  "Type": "Service",
+  "StartType": 3
+}

@@ -1,0 +1,53 @@
+{
+  "Publisher": "TeamViewer",
+  "Values": [
+    {
+      "Name": "DisplayName",
+      "Value": "TeamViewer"
+    },
+    {
+      "Name": "DisplayIcon",
+      "Value": "C:\\Program Files\\TeamViewer\\TeamViewer.exe"
+    },
+    {
+      "Name": "Publisher",
+      "Value": "TeamViewer"
+    },
+    {
+      "Name": "HelpLink",
+      "Value": "https://www.teamviewer.com"
+    },
+    {
+      "Name": "UninstallString",
+      "Value": "\"C:\\Program Files\\TeamViewer\\uninstall.exe\""
+    },
+    {
+      "Name": "NoModify",
+      "Value": 1
+    },
+    {
+      "Name": "NoRepair",
+      "Value": 1
+    },
+    {
+      "Name": "VersionMajor",
+      "Value": 15
+    },
+    {
+      "Name": "VersionMinor",
+      "Value": 83
+    },
+    {
+      "Name": "InstallLocation",
+      "Value": "C:\\Program Files\\TeamViewer"
+    },
+    {
+      "Name": "DisplayVersion",
+      "Value": "15.83.7"
+    }
+  ],
+  "UninstallString": "\"C:\\Program Files\\TeamViewer\\uninstall.exe\"",
+  "RegKeyPath": "Microsoft.PowerShell.Core\\Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TeamViewer",
+  "Name": "TeamViewer",
+  "Type": "Win32"
+}

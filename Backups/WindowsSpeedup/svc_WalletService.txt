@@ -1,0 +1,6 @@
+{
+  "Reason": "Wallet Service",
+  "Name": "WalletService",
+  "Type": "Service",
+  "StartType": 3
+}

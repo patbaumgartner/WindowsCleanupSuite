@@ -1,0 +1,8 @@
+{
+  "TaskPath": "\\Microsoft\\Windows\\DiskDiagnostic\\",
+  "Enabled": false,
+  "TaskName": "Microsoft-Windows-DiskDiagnosticDataCollector",
+  "State": 1,
+  "Reason": "Disk Diagnostic",
+  "Type": "Task"
+}

@@ -1,0 +1,8 @@
+{
+  "PreviousValue": 1,
+  "Reason": "Disable Notepad AI features",
+  "Name": "DisableAIFeatures",
+  "NewValue": 1,
+  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\WindowsNotepad",
+  "Type": "Registry"
+}

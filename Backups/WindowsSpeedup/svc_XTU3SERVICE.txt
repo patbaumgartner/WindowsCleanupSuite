@@ -1,0 +1,6 @@
+{
+  "Reason": "Intel XTU overclock service (not overclocking)",
+  "Name": "XTU3SERVICE",
+  "Type": "Service",
+  "StartType": 3
+}

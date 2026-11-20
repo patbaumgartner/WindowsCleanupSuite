@@ -1,0 +1,6 @@
+{
+  "Reason": "Diagnostic Hub Service",
+  "Name": "diagsvc",
+  "Type": "Service",
+  "StartType": 3
+}

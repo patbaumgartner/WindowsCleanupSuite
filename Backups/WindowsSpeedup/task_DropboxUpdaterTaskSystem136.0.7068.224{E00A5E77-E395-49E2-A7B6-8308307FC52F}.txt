@@ -1,0 +1,8 @@
+{
+  "TaskPath": "\\DropboxSystem\\DropboxUpdater\\",
+  "Enabled": false,
+  "TaskName": "DropboxUpdaterTaskSystem136.0.7068.224{E00A5E77-E395-49E2-A7B6-8308307FC52F}",
+  "State": 1,
+  "Reason": "Dropbox updater scheduled task",
+  "Type": "Task"
+}

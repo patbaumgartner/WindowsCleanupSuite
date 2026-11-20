@@ -1,0 +1,8 @@
+{
+  "PreviousValue": 0,
+  "Reason": "Disable New Tab Page AI chat (Edge)",
+  "Name": "NewTabPageBingChatEnabled",
+  "NewValue": 0,
+  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
+  "Type": "Registry"
+}

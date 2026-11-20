@@ -1,0 +1,8 @@
+{
+  "TaskPath": "\\Microsoft\\Windows\\Maps\\",
+  "Enabled": false,
+  "TaskName": "MapsToastTask",
+  "State": 1,
+  "Reason": "Maps Toast",
+  "Type": "Task"
+}

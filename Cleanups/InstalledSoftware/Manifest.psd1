@@ -2,15 +2,13 @@
 @{
     Project           = 'WindowsCleanupSuite'
     Cleanup           = 'InstalledSoftware'
-    Description       = 'Removes commonly unwanted third-party software: Win32 apps via their uninstaller (Discord, Dropbox, ...), and Windows 10+ UWP apps via Remove-AppxPackage/Remove-AppxProvisionedPackage.'
+    Description       = 'Removes commonly unwanted third-party software: Win32 apps via their uninstaller (Discord, Signal, ...), and Windows 10+ UWP apps via Remove-AppxPackage/Remove-AppxProvisionedPackage.'
     ProtectedPatterns = @('*DSA*', '*Driver*Support*')
 
     # Win32 apps: removed via their UninstallString from the Uninstall registry keys.
     Win32Apps = @(
+        # User request: PowerToys, TeamViewer and Dropbox are kept - not flagged as bloatware.
         @{ Name = 'Discord';                     Publisher = 'Discord Inc';                     Reason = 'Discord voice/chat client' },
-        @{ Name = 'Dropbox';                     Publisher = 'Dropbox, Inc.';                   Reason = 'Dropbox cloud storage client' },
-        @{ Name = 'PowerToys (Preview) x64';     Publisher = 'Microsoft Corporation';           Reason = 'PowerToys utilities' },
-        @{ Name = 'TeamViewer';                  Publisher = 'TeamViewer';                     Reason = 'TeamViewer remote desktop' },
         @{ Name = 'Signal 8.36.0';               Publisher = 'Signal Messenger, LLC';           Reason = 'Signal secure messenger' },
         @{ Name = 'Telegram Desktop';            Publisher = 'Telegram FZ-LLC';                Reason = 'Telegram messenger' },
         @{ Name = 'Wavebox';                     Publisher = 'The Wavebox Authors';            Reason = 'Wavebox web-apps browser' },
@@ -157,3 +155,4 @@
         @{ NamePattern = '*TuneInRadio*';                           Reason = 'TuneIn Radio' }
     )
 }
+

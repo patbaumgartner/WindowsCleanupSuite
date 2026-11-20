@@ -1,0 +1,8 @@
+{
+  "PreviousValue": 0,
+  "Reason": "Disable AI history search (Edge)",
+  "Name": "EdgeHistoryAISearchEnabled",
+  "NewValue": 0,
+  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
+  "Type": "Registry"
+}

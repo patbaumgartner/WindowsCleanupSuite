@@ -1,0 +1,6 @@
+{
+  "Reason": "Zoom VDI Sharing Service",
+  "Name": "ZoomCptService",
+  "Type": "Service",
+  "StartType": 3
+}
