@@ -34,9 +34,14 @@
 .PARAMETER SkipProcessStops
     Skips stopping already-running user applications at the end of the run.
 
+.PARAMETER AllowRisky
+    Also apply entries flagged Risky = $true in the manifest
+    (VPN/Citrix services, Windows Search indexing, cross-device platform).
+
 .EXAMPLE
     & '.\Disable-ServicesAndTasks.ps1' -WhatIf
     & '.\Disable-ServicesAndTasks.ps1' -Profile Balanced
+    & '.\Disable-ServicesAndTasks.ps1' -Profile Maximum -AllowRisky
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -45,7 +50,9 @@ param(
 
     [switch]$LoginSafe,
 
-    [switch]$SkipProcessStops
+    [switch]$SkipProcessStops,
+
+    [switch]$AllowRisky
 )
 
 . (Join-Path $PSScriptRoot '..\..\Core\CleanupEngine.ps1')
@@ -120,6 +127,10 @@ foreach ($entry in @($manifest.Services)) {
         Write-Host "  [service] Skipped (LoginSafe): $($entry.Name)"
         continue
     }
+    if (-not (Test-SuiteEntryRiskyAllowed -Entry $entry -AllowRisky:$AllowRisky)) {
+        Write-Host "  [service] Skipped (Risky - pass -AllowRisky): $($entry.Name) - $($entry.Reason)"
+        continue
+    }
     Disable-SuiteService -Entry $entry
 }
 
@@ -173,6 +184,10 @@ function Disable-SuiteScheduledTask {
 
 foreach ($entry in @($manifest.Tasks)) {
     if (-not (Test-SuiteEntryApplies -Entry $entry -Profile $Profile)) { continue }
+    if (-not (Test-SuiteEntryRiskyAllowed -Entry $entry -AllowRisky:$AllowRisky)) {
+        Write-Host "  [task]    Skipped (Risky - pass -AllowRisky): $($entry.Name) - $($entry.Reason)"
+        continue
+    }
     Disable-SuiteScheduledTask -Entry $entry
 }
 
@@ -351,6 +366,10 @@ foreach ($entry in @($manifest.AppModelStartup)) {
 if (-not $SkipProcessStops) {
     foreach ($entry in @($manifest.ProcessStops)) {
         if (-not (Test-SuiteEntryApplies -Entry $entry -Profile $Profile)) { continue }
+        if (-not (Test-SuiteEntryRiskyAllowed -Entry $entry -AllowRisky:$AllowRisky)) {
+            Write-Host "  [proc]    Skipped (Risky - pass -AllowRisky): $($entry.Name)"
+            continue
+        }
         $running = Get-Process -Name $entry.Name -ErrorAction SilentlyContinue
         if (-not $running) { continue }
         if (Test-SuiteIsProtected -Name $entry.Name -Manifest $manifest) {

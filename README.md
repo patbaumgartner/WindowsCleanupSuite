@@ -1,7 +1,7 @@
 # WindowsCleanupSuite
 
-[![Build Status](https://img.shields.io/badge/CI-passing-brightgreen.svg)](https://github.com/WindowsCleanupSuite/WindowsCleanupSuite/actions)
-[![Release](https://img.shields.io/badge/Releases-v1.0.0-brightgreen.svg)](https://github.com/WindowsCleanupSuite/WindowsCleanupSuite/releases)
+[![Build Status](https://img.shields.io/badge/CI-passing-brightgreen.svg)](https://github.com/patbaumgartner/WindowsCleanupSuite/actions)
+[![Release](https://img.shields.io/badge/Releases-v1.0.0-brightgreen.svg)](https://github.com/patbaumgartner/WindowsCleanupSuite/releases)
 [![PowerShell 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://learn.microsoft.com/en-us/powershell/scripting/windows-powershell/overview)
 [![Windows 10/11](https://img.shields.io/badge/Windows-10/11-blue.svg)](https://www.microsoft.com/windows)
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -51,6 +51,24 @@ Walk through:
 5. **Actions menu** — preview / apply / updates+re-debloat / schedule re-run / revert / audits / help / exit.
 
 Everything is colored, numbered and stable — invalid input is retried instead of crashing.
+
+### Self-executing download (curl-friendly)
+
+Get the menu without downloading anything — `Launcher.ps1` fetches the latest GitHub
+Release zip, extracts it to `%TEMP%\WindowsCleanupSuite` and launches the menu. It is
+**curl-friendly and the Raphire/Win11Debloat style**:
+
+```powershell
+# PowerShell (recommended):
+irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/master/Launcher.ps1
+
+# curl (Windows):
+curl.exe https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/master/Launcher.ps1 -o "%TEMP%\Launcher.ps1"
+powershell -File "%TEMP%\Launcher.ps1"
+```
+
+Re-run it any time to update (it always extracts the latest release).
+You can also run it locally: `Launcher.ps1 -WhatIf` (dry run).
 
 ## 🔧 Non-interactive (CLI)
 
@@ -283,3 +301,4 @@ PRs welcome. Follow the existing patterns: data-driven `Manifest.psd1` + `Disabl
 
 Downloadable archives are attached to GitHub Releases (tag `vX.Y.Z`).
 `WindowsCleanupSuite-vX.Y.Z.zip` + `SHA256.txt` + a downloadable snapshot from every build.
+

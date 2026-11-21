@@ -13,6 +13,8 @@ param(
 
     [switch]$SkipProcessStops,
 
+    [switch]$AllowRisky,
+
     [switch]$AutoApprove
 )
 
@@ -23,15 +25,12 @@ if (-not (Test-Path $runner)) {
     exit 1
 }
 
-$powershellExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { 'pwsh' } else { 'powershell' }
+# Note: the runner is invoked directly (& $runner ...) in this same process -
+# spawning a nested powershell.exe is avoided on purpose.
 
 # 1. Preview.
-$loginSafeFlag = if ($LoginSafe) { '-LoginSafe' } else { '-LoginSafe:$false' }
-$previewArgs = @('-File', $runner, '-Profile', $Profile, $loginSafeFlag)
-if ($SkipProcessStops) { $previewArgs += '-SkipProcessStops' }
-
 Write-Host 'Running cleanup preview...'
-& $powershellExe @previewArgs
+& $runner -Profile $Profile -LoginSafe:$LoginSafe -SkipProcessStops:$SkipProcessStops -AllowRisky:$AllowRisky
 
 # 2. Confirm.
 $approved = $AutoApprove
@@ -45,8 +44,5 @@ if (-not $approved) {
 }
 
 # 3. Apply.
-$applyArgs = @('-File', $runner, '-Profile', $Profile, '-Apply', $loginSafeFlag)
-if ($SkipProcessStops) { $applyArgs += '-SkipProcessStops' }
-
 Write-Host 'Applying cleanup run...'
-& $powershellExe @applyArgs
+& $runner -Profile $Profile -Apply -LoginSafe:$LoginSafe -SkipProcessStops:$SkipProcessStops -AllowRisky:$AllowRisky

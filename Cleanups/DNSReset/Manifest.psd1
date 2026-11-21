@@ -12,6 +12,8 @@
         'netsh int ip reset',
         'netsh winsock reset',
         'netsh interface ipv4 reset',
-        'netsh interface ipv6 reset'
+        'netsh interface ipv6 reset',
+        'netsh int tcp set global rss=disabled',
+        'netsh int tcp set global autotuninglevel=restricted'
     )
 }

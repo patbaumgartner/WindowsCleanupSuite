@@ -81,11 +81,7 @@ $expectedCleanups = @(
     @{ Cleanup = 'PrivacySettings';   Manifest = 'Manifest.psd1'; Disable = 'Disable-PrivacySettings.ps1';        Restore = 'Restore-PrivacySettings.ps1';        Protected = @('*DSA*', '*Driver*Support*') },
     @{ Cleanup = 'WindowsUpdates';    Manifest = 'Manifest.psd1'; Disable = 'Disable-WindowsUpdates.ps1';         Restore = 'Restore-WindowsUpdates.ps1';         Protected = @('*DSA*', '*Driver*Support*') },
     @{ Cleanup = 'OneDrive';          Manifest = 'Manifest.psd1'; Disable = 'Disable-OneDrive.ps1';               Restore = 'Restore-OneDrive.ps1';               Protected = @('*DSA*', '*Driver*Support*') },
-    @{ Cleanup = 'ExtremeExtras';     Manifest = 'Manifest.psd1'; Disable = 'Disable-ExtremeExtras.ps1';         Restore = 'Restore-ExtremeExtras.ps1';         Protected = @('*DSA*', '*Driver*Support*') },
-    # User-added cleanups (in-progress work, kept with same conventions)
-    @{ Cleanup = 'Privacy';           Manifest = 'Manifest.psd1'; Disable = 'Disable-Privacy.ps1';               Restore = 'Restore-Privacy.ps1';               Protected = @('*DSA*', '*Driver*Support*') },
-    @{ Cleanup = 'Browsers';          Manifest = 'Manifest.psd1'; Disable = 'Disable-Browsers.ps1';               Restore = 'Restore-Browsers.ps1';               Protected = @('*DSA*', '*Driver*Support*') },
-    @{ Cleanup = 'Network';           Manifest = 'Manifest.psd1'; Disable = 'Disable-Network.ps1';               Restore = 'Restore-Network.ps1';               Protected = @('*DSA*', '*Driver*Support*') }
+    @{ Cleanup = 'ExtremeExtras';     Manifest = 'Manifest.psd1'; Disable = 'Disable-ExtremeExtras.ps1';         Restore = 'Restore-ExtremeExtras.ps1';         Protected = @('*DSA*', '*Driver*Support*') }
 )
 
 foreach ($expected in $expectedCleanups) {
@@ -119,9 +115,6 @@ foreach ($expected in $expectedCleanups) {
             'WindowsUpdates'    { 'RegistryEntries' }
             'OneDrive'          { 'Entries' }
             'ExtremeExtras'     { 'Services' }
-            'Privacy'           { 'Entries' }
-            'Browsers'          { 'Entries' }
-            'Network'           { 'Entries' }
             default             { 'Services' }
         }
         $entries = @($manifest.$entriesKey | Where-Object { $null -ne $_ })
@@ -245,7 +238,7 @@ foreach ($rel in @(
     'Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1', 'Audit\Audit-RunningServices.ps1', 'Audit\Check-SystemHealth.ps1', 'Audit\Perf-Snapshot.ps1',
     'Tests\Invoke-SuiteTests.ps1',
     'Core\CleanupEngine.ps1', 'Core\WCS.Catalog.ps1', 'Core\WCS.Menu.ps1', 'Core\WCS.Updates.ps1', 'Core\WCS.Scheduler.ps1',
-    'Tools\Restore-WCSBackup.ps1',
+    'Tools\Restore-WCSBackup.ps1', 'Launcher.ps1',
     'LICENSE', 'CHANGELOG.md', 'VERSION', 'README.md'
 )) {
     Test-SuiteCheck -Name "File exists: $rel" -Pass (Test-Path (Join-Path $SuiteRoot $rel))
@@ -283,6 +276,21 @@ if (Test-Path $menuScript) {
     $smokeOutput = & $menuScript -NonInteractive -Level 2 -Topics $smokeTopics 2>&1
     $smokeExit = $LASTEXITCODE
     Test-SuiteCheck -Name 'Smoke: Runners\Run-Menu.ps1 -NonInteractive preview exits 0' -Pass ($smokeExit -eq 0)
+}
+
+# --- 5b. Launcher checks ---------------------------------------------------------------
+Test-SuiteCheck -Name 'Launcher: has -ZipUrl, -InstallDir, -Launch, -WhatIf params' -Pass (
+    (Get-Content -Raw (Join-Path $SuiteRoot 'Launcher.ps1') -ErrorAction SilentlyContinue) -match '\[string\]\$ZipUrl' -and
+    (Get-Content -Raw (Join-Path $SuiteRoot 'Launcher.ps1') -ErrorAction SilentlyContinue) -match '\[string\]\$InstallDir' -and
+    (Get-Content -Raw (Join-Path $SuiteRoot 'Launcher.ps1')) -match '\[switch\]\$Launch' -and
+    (Get-Content -Raw (Join-Path $SuiteRoot 'Launcher.ps1')) -match '\[switch\]\$WhatIf')
+
+Write-Host 'Running Launcher dry run (Launcher.ps1 -WhatIf)...'
+$launcherExit = $null
+if (Test-Path (Join-Path $SuiteRoot 'Launcher.ps1')) {
+    $out = & (Join-Path $SuiteRoot 'Launcher.ps1') -WhatIf 2>&1
+    $launcherExit = $LASTEXITCODE
+    Test-SuiteCheck -Name 'Smoke: Launcher.ps1 -WhatIf exits 0' -Pass ($launcherExit -eq 0)
 }
 
 # --- 6. Independence from the previous project ---------------------------------------

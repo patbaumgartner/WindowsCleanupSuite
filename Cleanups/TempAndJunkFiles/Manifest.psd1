@@ -27,8 +27,15 @@
         '%SYSTEMDRIVE%\INTEL',
         '%PROGRAMDATA%\Package Cache',
         '%PROGRAMDATA%\Microsoft\Windows\WER\Temp',
-        '%LOCALAPPDATA%\Microsoft\Windows\PowerShell\PSReadLine'
+        '%LOCALAPPDATA%\Microsoft\Windows\PowerShell\PSReadLine',
+        # --- 2025 additions (Chainski WindowsCleanerUtility + Marvin700 extras) ---
+        '%LOCALAPPDATA%\Temp',
+        '%LOCALAPPDATA%\Google\Chrome\User Data\Default\Cache',
+        '%LOCALAPPDATA%\Google\Chrome\User Data\Default\Code Cache',
+        '%LOCALAPPDATA%\Google\Chrome\User Data\Default\GPUCache'
     )
     FilePatterns = @('*.tmp', '*.log', '*.old', '*.trace', '*.bak', 'memory.dmp')
     ClearEventLogs = $true
+    # Default Disk Cleanup preset (cleanmgr /sagerun:5), backups optional but enabled by default
+    DiskCleanupSagerun = 5
 }

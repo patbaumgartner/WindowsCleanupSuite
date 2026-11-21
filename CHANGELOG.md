@@ -2,6 +2,15 @@
 
 All notable changes to WindowsCleanupSuite will be documented in this file.
 
+## [1.0.0] - 2026-11-21 - self-executing launcher
+
+- **Launcher.ps1** — self-executing, curl-friendly download-and-run (the Raphire/Win11Debloat
+  style): `irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/master/Launcher.ps1`
+  fetches the latest GitHub Release zip, extracts it to `%TEMP%\WindowsCleanupSuite` and launches the menu.
+  (GitHub API unavailable from this sandbox - verified: curl.exe to api.github.com fails.)
+
+## [1.0.0] - 2026-11-21 (final)
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 = first publishable release).
 
@@ -83,3 +92,4 @@ project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 
 - Engine (`Core\CleanupEngine.ps1`) — added shared `Set-WCSRegistryEntry` /
   `Get-WCSRegistryValue` helpers used by the new cleanups.
 - `Runners\Run-Monthly.ps1` (legacy) kept; new `Runners\Run-Menu.ps1` is the main entry point.
+

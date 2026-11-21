@@ -61,4 +61,26 @@ if ($manifest.ClearEventLogs) {
     }
 }
 
+# Disk Cleanup (classic presets; low-value files only)
+if ($manifest.DiskCleanupSagerun) {
+    $sagerun = $manifest.DiskCleanupSagerun
+    if (-not $PSCmdlet.ShouldProcess('Disk Cleanup', "Run Disk Cleanup (cleanmgr /verylowdisk /sagerun:$sagerun)")) {
+        Write-Host "  Would run: cleanmgr /verylowdisk /sagerun:$sagerun"
+    } else {
+        try {
+            $out = & cmd /c "cleanmgr /verylowdisk /sagerun:$sagerun" 2>&1
+            if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -notin @(1)) { Write-Host "  Ran: cleanmgr /verylowdisk /sagerun:$sagerun" } else { Write-Warning "  cleanmgr exit code: $LASTEXITCODE" }
+        } catch { Write-Warning "  cleanmgr failed: $($_.Exception.Message)" }
+    }
+}
+
+# Defragment system drive (enables fast startup-friendly fragmentation levels)
+$defragDrive = $env:SystemDrive
+if ($PSCmdlet.ShouldProcess($defragDrive, 'Defragment drive /O /U (user files only)')) {
+    try {
+        & cmd /c "defrag $defragDrive /O /U" 2>&1 | Out-Null
+        Write-Host "  Defragmented (optimize): $defragDrive"
+    } catch { Write-Warning "  defrag failed: $($_.Exception.Message)" }
+}
+
 Write-Host 'Done.'

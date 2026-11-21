@@ -340,21 +340,9 @@ function Invoke-WCSActionMenu {
             '7' {
                 Invoke-WCSTool -Tool 'Runners\Restore-All.ps1'
             }
-            '8' {
-                foreach ($script in @('Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1')) {
-                    $path = Join-Path (Get-SuiteRoot) $script
-                    if (Test-Path $path) { & $path }
-                }
-            }
-            '6' {
-                foreach ($script in @('Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1')) {
-                    $path = Join-Path (Get-SuiteRoot) $script
-                    if (Test-Path $path) { & $path }
-                }
-            }
             'h' { Show-WCSHelp }
             default {
-                Write-Host '  Invalid or empty input - type a number between 0 and 6.' -ForegroundColor Yellow
+                Write-Host '  Invalid or empty input - type a number between 0 and 7.' -ForegroundColor Yellow
             }
         }
         if ($choice -in @('0', '') -or $null -eq $choice) {

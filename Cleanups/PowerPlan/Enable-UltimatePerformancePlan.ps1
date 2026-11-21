@@ -74,3 +74,10 @@ if (Test-Path $powercfg) {
     & $powercfg /HIBERNATE ON 2>$null | Out-Null
     Write-Host '  Enabled hibernation (full)'
 }
+
+# Debloat: disable hibernate entirely (faster boot, less disk churn; fast startup
+# is separately disabled by the WindowsUpdates cleanup via HiberbootEnabled=0).
+if (Test-Path $powercfg) {
+    $hiberOff = & $powercfg /HIBERNATE OFF 2>$null
+    Write-Host "  Disabled hibernate: $hiberOff"
+}
