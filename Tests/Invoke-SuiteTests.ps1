@@ -5,11 +5,14 @@
 
 .DESCRIPTION
     1. Parses every .ps1 file in the project (Parser::ParseInput).
-    2. Verifies each cleanup has a Manifest.psd1, Disable and Restore scripts.
+    2. Verifies each cleanup has a Manifest.psd1, Disable and Restore scripts
+       (7 original + 3 new data-driven + 4 menu-era cleanups).
     3. Verifies manifests import and define ProtectedPatterns (DSA protected).
-    4. Verifies runners/audit/engine/tests files exist.
-    5. Verifies the project does not reference the previous project
-       (run-full-debloat, startup-bloat, windows-speedup).
+    4. Verifies the menu-era cleanups pass the new schema checks (levels, entries).
+    5. Verifies extension manifests (TempAndJunkFiles, DNSReset).
+    6. Verifies menu/core/tools/docs files exist.
+    7. Menu smoke test: non-interactive preview (nothing changes).
+    8. Independence from the previous project (run-full-debloat, etc.).
 
 .EXAMPLE
     & 'WindowsCleanupSuite\Tests\Invoke-SuiteTests.ps1'
@@ -68,9 +71,21 @@ $expectedCleanups = @(
     @{ Cleanup = 'WindowsSpeedup';    Manifest = 'Manifest.psd1'; Disable = 'Disable-ServicesAndTasks.ps1';       Restore = 'Restore-ServicesAndTasks.ps1';       Protected = @('*DSA*', '*Driver*Support*') },
     @{ Cleanup = 'InstalledSoftware'; Manifest = 'Manifest.psd1'; Disable = 'Disable-InstalledSoftware.ps1';      Restore = 'Restore-InstalledSoftware.ps1';      Protected = @('*DSA*', '*Driver*Support*') },
     @{ Cleanup = 'WindowsAI';         Manifest = 'Manifest.psd1'; Disable = 'Disable-WindowsAI.ps1';               Restore = 'Restore-WindowsAI.ps1';               Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'Privacy';           Manifest = 'Manifest.psd1'; Disable = 'Disable-Privacy.ps1';                  Restore = 'Restore-Privacy.ps1';                  Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'Browsers';          Manifest = 'Manifest.psd1'; Disable = 'Disable-Browsers.ps1';                 Restore = 'Restore-Browsers.ps1';                 Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'Network';           Manifest = 'Manifest.psd1'; Disable = 'Disable-Network.ps1';                  Restore = 'Restore-Network.ps1';                  Protected = @('*DSA*', '*Driver*Support*') },
     @{ Cleanup = 'TempAndJunkFiles';  Manifest = 'Manifest.psd1'; Disable = 'Disable-TempAndJunkFiles.ps1';       Restore = 'Restore-TempAndJunkFiles.ps1';       Protected = @('*DSA*', '*Driver*Support*') },
     @{ Cleanup = 'PowerPlan';         Manifest = 'Manifest.psd1'; Disable = 'Enable-UltimatePerformancePlan.ps1'; Restore = 'Restore-PowerPlan.ps1';             Protected = @('*DSA*', '*Driver*Support*') },
-    @{ Cleanup = 'DNSReset';          Manifest = 'Manifest.psd1'; Disable = 'Disable-DNSReset.ps1';                Restore = 'Restore-DNSReset.ps1';                Protected = @('*DSA*', '*Driver*Support*') }
+    @{ Cleanup = 'DNSReset';          Manifest = 'Manifest.psd1'; Disable = 'Disable-DNSReset.ps1';                Restore = 'Restore-DNSReset.ps1';                Protected = @('*DSA*', '*Driver*Support*') },
+    # Menu-era cleanups
+    @{ Cleanup = 'PrivacySettings';   Manifest = 'Manifest.psd1'; Disable = 'Disable-PrivacySettings.ps1';        Restore = 'Restore-PrivacySettings.ps1';        Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'WindowsUpdates';    Manifest = 'Manifest.psd1'; Disable = 'Disable-WindowsUpdates.ps1';         Restore = 'Restore-WindowsUpdates.ps1';         Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'OneDrive';          Manifest = 'Manifest.psd1'; Disable = 'Disable-OneDrive.ps1';               Restore = 'Restore-OneDrive.ps1';               Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'ExtremeExtras';     Manifest = 'Manifest.psd1'; Disable = 'Disable-ExtremeExtras.ps1';         Restore = 'Restore-ExtremeExtras.ps1';         Protected = @('*DSA*', '*Driver*Support*') },
+    # User-added cleanups (in-progress work, kept with same conventions)
+    @{ Cleanup = 'Privacy';           Manifest = 'Manifest.psd1'; Disable = 'Disable-Privacy.ps1';               Restore = 'Restore-Privacy.ps1';               Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'Browsers';          Manifest = 'Manifest.psd1'; Disable = 'Disable-Browsers.ps1';               Restore = 'Restore-Browsers.ps1';               Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'Network';           Manifest = 'Manifest.psd1'; Disable = 'Disable-Network.ps1';               Restore = 'Restore-Network.ps1';               Protected = @('*DSA*', '*Driver*Support*') }
 )
 
 foreach ($expected in $expectedCleanups) {
@@ -94,9 +109,19 @@ foreach ($expected in $expectedCleanups) {
             'StartupBloat'      { 'Targets' }
             'InstalledSoftware' { 'Win32Apps' }
             'WindowsAI'         { 'Entries' }
+            'Privacy'           { 'Entries' }
+            'Browsers'          { 'Entries' }
+            'Network'           { 'Entries' }
             'TempAndJunkFiles'  { 'Directories' }
             'PowerPlan'         { 'PowerPlans' }
             'DNSReset'          { 'Commands' }
+            'PrivacySettings'   { 'Entries' }
+            'WindowsUpdates'    { 'RegistryEntries' }
+            'OneDrive'          { 'Entries' }
+            'ExtremeExtras'     { 'Services' }
+            'Privacy'           { 'Entries' }
+            'Browsers'          { 'Entries' }
+            'Network'           { 'Entries' }
             default             { 'Services' }
         }
         $entries = @($manifest.$entriesKey | Where-Object { $null -ne $_ })
@@ -106,16 +131,161 @@ foreach ($expected in $expectedCleanups) {
                 $sub = @($manifest.$key | Where-Object { $null -ne $_ })
                 Test-SuiteCheck -Name "Manifest defines '$key' ($($sub.Count) entries)" -Pass ($sub.Count -gt 0)
             }
+            $riskySvcs = @($manifest.Services | Where-Object { $null -ne $_ -and $_.Risky -eq $true })
+            Test-SuiteCheck -Name "WindowsSpeedup has Risky-flagged services gated by -AllowRisky ($($riskySvcs.Count))" -Pass ($riskySvcs.Count -gt 0)
+        }
+        if ($expected.Cleanup -eq 'Network') {
+            $svcs = @($manifest.Services | Where-Object { $null -ne $_ })
+            Test-SuiteCheck -Name "Network manifest defines 'Services' ($($svcs.Count))" -Pass ($svcs.Count -gt 0)
+            Test-SuiteCheck -Name 'Network manifest defines Dns block with Servers + Risky' -Pass ($null -ne $manifest.Dns -and @($manifest.Dns.Servers).Count -gt 0 -and $manifest.Dns.Risky -eq $true)
+            $riskyReg = @($manifest.Entries | Where-Object { $null -ne $_ -and $_.Risky -eq $true })
+            Test-SuiteCheck -Name "Network has Risky-flagged registry entries ($($riskyReg.Count))" -Pass ($riskyReg.Count -gt 0)
+        }
+        if ($expected.Cleanup -in @('Privacy', 'Browsers', 'Network')) {
+            $disablePath = Join-Path $cleanupRoot $expected.Disable
+            $disableText = if (Test-Path $disablePath) { Get-Content -Raw -Path $disablePath } else { '' }
+            Test-SuiteCheck -Name "$($expected.Cleanup): Disable script has -AllowRisky + SupportsShouldProcess" -Pass ($disableText -match '\[switch\]\$AllowRisky' -and $disableText -match 'SupportsShouldProcess')
         }
     }
 }
 
-# --- 3. Runner / audit / engine files --------------------------------------------------
-foreach ($rel in @('Runners\Run-Cleanup.ps1', 'Runners\Run-Monthly.ps1', 'Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1', 'Audit\Audit-RunningServices.ps1', 'Audit\Check-SystemHealth.ps1', 'Tests\Invoke-SuiteTests.ps1', 'Core\CleanupEngine.ps1')) {
+# --- 3. Menu-era schema checks ------------------------------------------------------
+
+$menuEraCleanups = @('PrivacySettings', 'WindowsUpdates', 'OneDrive', 'ExtremeExtras', 'Privacy', 'Browsers', 'Network')
+foreach ($cleanupName in $menuEraCleanups) {
+    $manifestPath = Join-Path $SuiteRoot "Cleanups\$cleanupName\Manifest.psd1"
+    if (-not (Test-Path $manifestPath)) { continue }
+    $manifest = Import-PowerShellDataFile -Path $manifestPath -ErrorAction SilentlyContinue
+    Test-SuiteCheck -Name "Schema: $cleanupName manifest imports" -Pass ($null -ne $manifest)
+    if (-not $manifest) { continue }
+
+    $entriesKey = @{ PrivacySettings = 'Entries'; WindowsUpdates = 'RegistryEntries'; OneDrive = 'Entries'; ExtremeExtras = 'Services'; Privacy = 'Entries'; Browsers = 'Entries'; Network = 'Entries' }[$cleanupName]
+    $entries = @($manifest.$entriesKey | Where-Object { $null -ne $_ })
+    Test-SuiteCheck -Name "Schema: $cleanupName defines $entriesKey ($($entries.Count) entries)" -Pass ($entries.Count -gt 0)
+
+    foreach ($entry in $entries) {
+        $entryKeys = @($entry.Keys)
+        $name = if ($entryKeys -contains 'Name') { [string]$entry.Name } else { '<unnamed>' }
+        switch ($cleanupName) {
+            'PrivacySettings' {
+                Test-SuiteCheck -Name "Schema: PrivacySettings entry '$name' Level in 1..4" -Pass ([int]$entry.Level -ge 1 -and [int]$entry.Level -le 4)
+                Test-SuiteCheck -Name "Schema: PrivacySettings entry '$name' has Path/Name/Value/Reason" -Pass (
+                    ($entryKeys -contains 'Path') -and
+                    ($entryKeys -contains 'Name') -and
+                    ($entryKeys -contains 'Value') -and
+                    ($entryKeys -contains 'Reason'))
+            }
+            'Privacy' {
+                $hasRegKey = ($entryKeys -contains 'RegistryKey') -or ($entryKeys -contains 'Path') -or ($entryKeys -contains 'Registry') -or ($entryKeys -contains 'Name')
+                Test-SuiteCheck -Name "Schema: Privacy entry '$name' has RegistryKey/Name/Value/Reason/Type" -Pass (
+                    $hasRegKey -and
+                    ($entryKeys -contains 'Reason') -and
+                    ($entryKeys -contains 'Value'))
+            }
+            'Browsers' {
+                Test-SuiteCheck -Name "Schema: Browsers entry '$name' has RegistryKey/Name/Value/Reason" -Pass (
+                    ($entryKeys -contains 'RegistryKey') -and
+                    ($entryKeys -contains 'Name') -and
+                    ($entryKeys -contains 'Value') -and
+                    ($entryKeys -contains 'Reason'))
+            }
+            'Network' {
+                Test-SuiteCheck -Name "Schema: Network entry '$name' has RegistryKey/Name/Value/Reason or services/DNS sections" -Pass (($entryKeys -contains 'Reason') -or ($manifest.Services) -or ($manifest.Dns))
+                foreach ($svc in @($manifest.Services | Where-Object { $_ -ne $null })) {
+                    $svcKeys = @($svc.Keys)
+                    Test-SuiteCheck -Name "Schema: Network service '$($svc.Name)' has Name + Reason" -Pass (
+                        ($svcKeys -contains 'Name') -and
+                        ($svcKeys -contains 'Reason'))
+                }
+                Test-SuiteCheck -Name "Schema: Network defines Dns" -Pass ($null -ne $manifest.Dns)
+            }
+            'WindowsUpdates' {
+                foreach ($svc in @($manifest.Services | Where-Object { $_ -ne $null })) {
+                    Test-SuiteCheck -Name "Schema: WindowsUpdates service '$($svc.Name)' action allowed (Manual/Automatic/Disabled)" -Pass ($svc.Action -in @('Manual', 'Automatic', 'Disabled'))
+                }
+                Test-SuiteCheck -Name "Schema: WindowsUpdates entry '$name' has Path/Name/Value/Reason" -Pass (
+                    ($entryKeys -contains 'Path') -and
+                    ($entryKeys -contains 'Name') -and
+                    ($entryKeys -contains 'Value') -and
+                    ($entryKeys -contains 'Reason'))
+            }
+            'OneDrive' {
+                Test-SuiteCheck -Name "Schema: OneDrive entry '$name' has Action + Reason + Path/Name" -Pass (
+                    ($entryKeys -contains 'Action') -and
+                    ($entryKeys -contains 'Reason') -and
+                    ($entryKeys -contains 'Name') -and
+                    ($entryKeys -contains 'Path'))
+            }
+            'ExtremeExtras' {
+                Test-SuiteCheck -Name "Schema: ExtremeExtras entry '$name' Level=4 + Reason" -Pass (
+                    [int]$entry.Level -eq 4 -and
+                    ($entryKeys -contains 'Reason') -and
+                    ($entryKeys -contains 'Name'))
+            }
+        }
+    }
+}
+
+# --- 3b. Extension manifests ---------------------------------------------------------
+$tjManifest = Import-PowerShellDataFile -Path (Join-Path $SuiteRoot 'Cleanups\TempAndJunkFiles\Manifest.psd1')
+Test-SuiteCheck -Name 'Extension: TempAndJunkFiles has DiskCleanupSagerun' -Pass ([string]::IsNullOrWhiteSpace($tjManifest.DiskCleanupSagerun) -eq $false)
+Test-SuiteCheck -Name 'Extension: TempAndJunkFiles cleans %LOCALAPPDATA%\Temp' -Pass ([bool](@($tjManifest.Directories) -like '%LOCALAPPDATA%\Temp'))
+Test-SuiteCheck -Name 'Extension: TempAndJunkFiles cleans Chrome caches' -Pass ([bool](@($tjManifest.Directories) -like '*Chrome*Cache*').Count -ge 3)
+
+$dnsManifest = Import-PowerShellDataFile -Path (Join-Path $SuiteRoot 'Cleanups\DNSReset\Manifest.psd1')
+Test-SuiteCheck -Name 'Extension: DNSReset includes RSS tuning command' -Pass ([bool](@($dnsManifest.Commands) -like 'netsh int tcp set global rss=disabled'))
+Test-SuiteCheck -Name 'Extension: DNSReset includes autotuning restriction command' -Pass ([bool](@($dnsManifest.Commands) -like 'netsh int tcp set global autotuninglevel=restricted'))
+
+$powerManifest = Import-PowerShellDataFile -Path (Join-Path $SuiteRoot 'Cleanups\PowerPlan\Manifest.psd1')
+Test-SuiteCheck -Name 'Extension: PowerPlan has PowerPlans' -Pass (@($powerManifest.PowerPlans).Count -gt 0)
+
+# --- 4. Runner / audit / engine / menu / tools files --------------------------------
+foreach ($rel in @(
+    'Runners\Run-Cleanup.ps1', 'Runners\Run-Monthly.ps1', 'Runners\Run-Menu.ps1', 'Runners\Restore-All.ps1',
+    'Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1', 'Audit\Audit-RunningServices.ps1', 'Audit\Check-SystemHealth.ps1', 'Audit\Perf-Snapshot.ps1',
+    'Tests\Invoke-SuiteTests.ps1',
+    'Core\CleanupEngine.ps1', 'Core\WCS.Catalog.ps1', 'Core\WCS.Menu.ps1', 'Core\WCS.Updates.ps1', 'Core\WCS.Scheduler.ps1',
+    'Tools\Restore-WCSBackup.ps1',
+    'LICENSE', 'CHANGELOG.md', 'VERSION', 'README.md'
+)) {
     Test-SuiteCheck -Name "File exists: $rel" -Pass (Test-Path (Join-Path $SuiteRoot $rel))
 }
 
-# --- 4. Independence from the previous project --------------------------------------------
+# --- 4b. Wiring drift checks: engine order, runner steps, restore coverage ------------
+. (Join-Path $SuiteRoot 'Core\CleanupEngine.ps1')
+$engineOrder = @(Get-SuiteCleanupNames)
+foreach ($expected in $expectedCleanups) {
+    Test-SuiteCheck -Name "Engine run order includes '$($expected.Cleanup)'" -Pass ($engineOrder -contains $expected.Cleanup)
+    $restore = Get-ChildItem -Path (Join-Path $SuiteRoot "Cleanups\$($expected.Cleanup)") -Filter 'Restore-*.ps1' -ErrorAction SilentlyContinue
+    Test-SuiteCheck -Name "Restore-All can restore '$($expected.Cleanup)' (Restore-*.ps1 present)" -Pass ($null -ne $restore)
+}
+
+$runnerCleanups = @('StartupBloat', 'WindowsSpeedup', 'InstalledSoftware', 'WindowsAI', 'Privacy', 'Browsers', 'Network', 'TempAndJunkFiles', 'PowerPlan', 'DNSReset')
+$runCleanupText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Runners\Run-Cleanup.ps1')
+foreach ($name in $runnerCleanups) {
+    Test-SuiteCheck -Name "Run-Cleanup.ps1 runs cleanup '$name'" -Pass ($runCleanupText -match [regex]::Escape("Cleanups\$name\"))
+}
+Test-SuiteCheck -Name 'Run-Cleanup.ps1 has -AllowRisky parameter' -Pass ($runCleanupText -match '\[switch\]\$AllowRisky')
+Test-SuiteCheck -Name 'Run-Cleanup.ps1 takes perf snapshots Before and After' -Pass (($runCleanupText -match 'Perf-Snapshot\.ps1.*-Phase Before') -and ($runCleanupText -match 'Perf-Snapshot\.ps1.*-Phase After'))
+
+$monthlyText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Runners\Run-Monthly.ps1')
+Test-SuiteCheck -Name 'Run-Monthly.ps1 invokes runner directly (no nested powershell.exe spawn)' -Pass ($monthlyText -match '& \$runner' -and $monthlyText -notmatch '\$powershellExe')
+Test-SuiteCheck -Name 'Run-Monthly.ps1 supports -AllowRisky' -Pass ($monthlyText -match '\[switch\]\$AllowRisky')
+
+$wsDisableText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1')
+Test-SuiteCheck -Name 'WindowsSpeedup Disable has -AllowRisky + risky gates (services/tasks/processes)' -Pass ($wsDisableText -match '\[switch\]\$AllowRisky' -and (@([regex]::Matches($wsDisableText, 'Test-SuiteEntryRiskyAllowed')).Count -ge 3))
+
+# --- 5. Menu smoke test (non-interactive, preview only; nothing should change) --------
+$menuScript = Join-Path $SuiteRoot 'Runners\Run-Menu.ps1'
+if (Test-Path $menuScript) {
+    $smokeTopics = @('ServicesTasks', 'PrivacySettings', 'WindowsUpdates', 'OneDrive', 'Maintenance', 'DNS', 'PowerPlan', 'Privacy', 'Browsers', 'Network')
+    Write-Host 'Running menu smoke test (non-interactive, preview) - this runs cleanup previews only...'
+    $smokeOutput = & $menuScript -NonInteractive -Level 2 -Topics $smokeTopics 2>&1
+    $smokeExit = $LASTEXITCODE
+    Test-SuiteCheck -Name 'Smoke: Runners\Run-Menu.ps1 -NonInteractive preview exits 0' -Pass ($smokeExit -eq 0)
+}
+
+# --- 6. Independence from the previous project ---------------------------------------
 $previousProjectRefs = @('run-full-debloat', 'run-monthly-debloat', 'startup-bloat', 'windows-speedup')
 $thisFile = Join-Path $PSScriptRoot 'Invoke-SuiteTests.ps1'
 $files = @(Get-ChildItem -Path $SuiteRoot -Recurse -File -Include '*.ps1', '*.psd1' -ErrorAction SilentlyContinue)

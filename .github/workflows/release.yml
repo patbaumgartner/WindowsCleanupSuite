@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v1.0.0). Must match the VERSION file.'
+        required: true
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine & validate tag
+        id: tag
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $tag = '${{ github.event.inputs.version }}'
+            if (-not $tag.StartsWith('v')) { $tag = "v$tag" }
+          }
+          $versionFile = (Get-Content VERSION -Raw -ErrorAction Stop).Trim()
+          if ($tag.Trim() -ne "v$versionFile") {
+            Write-Error "Tag '$tag' must match VERSION file 'v$versionFile'."
+            exit 1
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8
+
+      - name: Build zip + SHA256 checksums
+        id: build
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $zip = "WindowsCleanupSuite-$tag.zip"
+          $files = @()
+          foreach ($item in (Get-ChildItem -Path . -File -Recurse -ErrorAction SilentlyContinue)) {
+            $full = $item.FullName
+            if ($full -match '(^|\\)(\.git|Logs|Backups)(\\|$)') { continue }
+            $files += $full
+          }
+          Compress-Archive -Path @($files) -DestinationPath $zip -Force
+          $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash
+          "$hash  $zip" | Set-Content "$zip.SHA256" -Encoding ASCII
+          Write-Host "Built $zip and $zip.SHA256"
+          "zip=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8 -Append
+
+      - name: Create GitHub Release
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $zip = "${{ steps.build.outputs.zip }}"
+          $sha = "$zip.SHA256"
+          $title = "WindowsCleanupSuite $tag"
+          $assets = @((Join-Path $env:GITHUB_WORKSPACE $zip), (Join-Path $env:GITHUB_WORKSPACE $sha))
+          gh release create $tag --title $title --notes-from-file CHANGELOG.md -R '${{ github.repository }}' @assets

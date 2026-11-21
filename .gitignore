@@ -1,1 +1,5 @@
 Logs/
+*.orig
+*.rej
+*.zip
+Config/UserPreferences.json
