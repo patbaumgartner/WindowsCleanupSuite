@@ -234,7 +234,7 @@ Test-SuiteCheck -Name 'Extension: PowerPlan has PowerPlans' -Pass (@($powerManif
 
 # --- 4. Runner / audit / engine / menu / tools files --------------------------------
 foreach ($rel in @(
-    'Runners\Run-Cleanup.ps1', 'Runners\Run-Monthly.ps1', 'Runners\Run-Menu.ps1', 'Runners\Restore-All.ps1',
+    'Runners\Run-Menu.ps1',
     'Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1', 'Audit\Audit-RunningServices.ps1', 'Audit\Check-SystemHealth.ps1', 'Audit\Perf-Snapshot.ps1',
     'Tests\Invoke-SuiteTests.ps1',
     'Core\CleanupEngine.ps1', 'Core\WCS.Catalog.ps1', 'Core\WCS.Menu.ps1', 'Core\WCS.Updates.ps1', 'Core\WCS.Scheduler.ps1',
@@ -244,26 +244,36 @@ foreach ($rel in @(
     Test-SuiteCheck -Name "File exists: $rel" -Pass (Test-Path (Join-Path $SuiteRoot $rel))
 }
 
+# Legacy entry points are removed on purpose (no backwards compatibility).
+foreach ($legacy in @('Runners\Run-Cleanup.ps1', 'Runners\Run-Monthly.ps1', 'Runners\Restore-All.ps1')) {
+    Test-SuiteCheck -Name "Legacy entry point removed: $legacy" -Pass (-not (Test-Path (Join-Path $SuiteRoot $legacy)))
+}
+
 # --- 4b. Wiring drift checks: engine order, runner steps, restore coverage ------------
 . (Join-Path $SuiteRoot 'Core\CleanupEngine.ps1')
 $engineOrder = @(Get-SuiteCleanupNames)
 foreach ($expected in $expectedCleanups) {
     Test-SuiteCheck -Name "Engine run order includes '$($expected.Cleanup)'" -Pass ($engineOrder -contains $expected.Cleanup)
     $restore = Get-ChildItem -Path (Join-Path $SuiteRoot "Cleanups\$($expected.Cleanup)") -Filter 'Restore-*.ps1' -ErrorAction SilentlyContinue
-    Test-SuiteCheck -Name "Restore-All can restore '$($expected.Cleanup)' (Restore-*.ps1 present)" -Pass ($null -ne $restore)
+    Test-SuiteCheck -Name "Restore flow can restore '$($expected.Cleanup)' (Restore-*.ps1 present)" -Pass ($null -ne $restore)
 }
 
-$runnerCleanups = @('StartupBloat', 'WindowsSpeedup', 'InstalledSoftware', 'WindowsAI', 'Privacy', 'Browsers', 'Network', 'TempAndJunkFiles', 'PowerPlan', 'DNSReset')
-$runCleanupText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Runners\Run-Cleanup.ps1')
-foreach ($name in $runnerCleanups) {
-    Test-SuiteCheck -Name "Run-Cleanup.ps1 runs cleanup '$name'" -Pass ($runCleanupText -match [regex]::Escape("Cleanups\$name\"))
-}
-Test-SuiteCheck -Name 'Run-Cleanup.ps1 has -AllowRisky parameter' -Pass ($runCleanupText -match '\[switch\]\$AllowRisky')
-Test-SuiteCheck -Name 'Run-Cleanup.ps1 takes perf snapshots Before and After' -Pass (($runCleanupText -match 'Perf-Snapshot\.ps1.*-Phase Before') -and ($runCleanupText -match 'Perf-Snapshot\.ps1.*-Phase After'))
+# Catalog wiring: ServicesTasks must map to the individual cleanup scripts
+# (the legacy Runners\Run-Cleanup.ps1 orchestrator is gone).
+$catalogText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Core\WCS.Catalog.ps1')
+Test-SuiteCheck -Name 'Catalog: ServicesTasks no longer points to legacy Run-Cleanup.ps1' -Pass ($catalogText -notmatch 'Runners\\Run-Cleanup\.ps1')
+Test-SuiteCheck -Name 'Catalog: ServicesTasks runs StartupBloat + ServicesAndTasks + InstalledSoftware' -Pass (
+    $catalogText -match [regex]::Escape("Cleanups\StartupBloat\Disable-StartupBloat.ps1") -and
+    $catalogText -match [regex]::Escape("Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1") -and
+    $catalogText -match [regex]::Escape("Cleanups\InstalledSoftware\Disable-InstalledSoftware.ps1"))
 
-$monthlyText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Runners\Run-Monthly.ps1')
-Test-SuiteCheck -Name 'Run-Monthly.ps1 invokes runner directly (no nested powershell.exe spawn)' -Pass ($monthlyText -match '& \$runner' -and $monthlyText -notmatch '\$powershellExe')
-Test-SuiteCheck -Name 'Run-Monthly.ps1 supports -AllowRisky' -Pass ($monthlyText -match '\[switch\]\$AllowRisky')
+# No code file may reference the removed legacy runners anymore.
+$legacyPattern = 'Run-Cleanup\.ps1|Run-Monthly\.ps1|Restore-All\.ps1'
+$codeFiles = @(Get-ChildItem -Path $SuiteRoot -Recurse -File -Include '*.ps1', '*.psd1', '*.yml', '*.yaml' -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -ine $PSCommandPath })
+$legacyHits = @()
+foreach ($f in $codeFiles) { $legacyHits += @(Select-String -Path $f.FullName -Pattern $legacyPattern -ErrorAction SilentlyContinue) }
+Test-SuiteCheck -Name 'No code references legacy runners (Run-Cleanup/Run-Monthly/Restore-All)' -Pass ($legacyHits.Count -eq 0)
 
 $wsDisableText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1')
 Test-SuiteCheck -Name 'WindowsSpeedup Disable has -AllowRisky + risky gates (services/tasks/processes)' -Pass ($wsDisableText -match '\[switch\]\$AllowRisky' -and (@([regex]::Matches($wsDisableText, 'Test-SuiteEntryRiskyAllowed')).Count -ge 3))

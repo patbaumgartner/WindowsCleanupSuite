@@ -16,6 +16,12 @@ project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-22 - legacy entry points removed
+
+### Removed
+
+- **Legacy entry points deleted** (no backwards compatibility): `Runners\Run-Cleanup.ps1`, `Runners\Run-Monthly.ps1` and `Runners\Restore-All.ps1` are gone — `Runners\Run-Menu.ps1` is the only entry point (interactive or `-NonInteractive`). The `ServicesTasks` topic now runs `Cleanups\StartupBloat\Disable-StartupBloat.ps1`, `Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1` (profile from the level, `-LoginSafe` on) and `Cleanups\InstalledSoftware\Disable-InstalledSoftware.ps1` directly. The scheduled re-run task and the post-update re-debloat now call `Run-Menu.ps1 -NonInteractive -Level 4 -Apply`; restore-all is `Tools\Restore-WCSBackup.ps1 -Backups` (menu action 5). Menu action 7 (legacy Restore-All) was removed; `Invoke-WCSDebloatAfterUpdates` now takes `-Level` instead of `-Profile`.
+
 ### Fixed
 
 - **Launcher.ps1**: GitHub API URL was built from the full repo URL (`api.github.com/repos/https://github.com/...` → 404) and there was no fallback when no release exists — the one-liner failed with "Could not resolve the latest release zip". Now uses `api.github.com/repos/patbaumgartner/WindowsCleanupSuite` and falls back to the `main` branch source archive (codeload) until the first `vX.Y.Z` release exists; added `-Branch`, forced TLS 1.2 for PS 5.1.
@@ -29,6 +35,7 @@ project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 
 - **Audit\Audit-InstalledSoftware.ps1**: fixed operator-precedence bug (`-not $x -contains 'y'` never skipped entries without DisplayName).
 - **Core\WCS.Catalog.ps1**: `ConvertFrom-WCSLevelInput` error messages referenced `$Input` (empty) instead of the actual input.
 - **Performance**: full `Get-Service`/`Get-ScheduledTask` enumerations are now cached per session (`Get-SuiteCachedServices`/`Get-SuiteCachedTasks`) — the Balanced preview ran ~6.5 min slower than needed because every manifest entry re-enumerated all services/tasks.
+- **Core\WCS.Scheduler.ps1**: task registration always failed — `-Hour` had `[ValidateRange(0,5)]` with default `8`, `New-ScheduledTaskTrigger -Daily` was combined with `-RepetitionInterval/-RepetitionDuration` (invalid parameter set), and `-StartWhenOnBattery` / `New-ScheduledTaskIdleSettings` do not exist. Now: range 0-23, `-Once` trigger with repetition interval/duration, valid settings set (`-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -WakeToRun`). Verified via `-WhatIf`.
 - **release.yml**: `gh release create` used `--notes-from-file`, which does not exist (current gh CLI: `-F/--notes-file`) — every tag release failed at the last step. Fixed to `--notes-file CHANGELOG.md`.
 - **README**: documented `Core\WCS.Updates.ps1` / `Core\WCS.Scheduler.ps1` as directly runnable with switches — they are function libraries; corrected to dot-source + `Invoke-WCSUpdateManager` / `Register-WCSReRunTask` usage. Level descriptions aligned with `Core\WCS.Catalog.ps1` (Safe default topics include Privacy/Browsers/Network; visual effects live in ServicesTasks).
 

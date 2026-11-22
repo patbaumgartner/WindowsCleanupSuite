@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Scheduled re-run support: register/unregister a Windows Task Scheduler task that
-    periodically re-runs the full debloat suite (Run-Cleanup.ps1 -Apply as SYSTEM).
+    periodically re-runs the full debloat suite (Runners\Run-Menu.ps1 -NonInteractive -Level 4 -Apply as SYSTEM).
 
 .DESCRIPTION
     Use cases:
@@ -30,25 +30,24 @@ function Register-WCSReRunTask {
     #>
     param(
         [ValidateRange(1, 365)][int]$Days = 7,
-        [ValidateRange(0, 5)][int]$Hour = 8,
+        [ValidateRange(0, 23)][int]$Hour = 8,
         [switch]$WhatIf
     )
 
     $root = Get-WCSRoot
-    $runScript = Join-Path $root 'Runners\Run-Cleanup.ps1'
-    if (-not (Test-Path $runScript)) { Write-Error "Run-Cleanup.ps1 not found at $runScript"; return $false }
+    $runScript = Join-Path $root 'Runners\Run-Menu.ps1'
+    if (-not (Test-Path $runScript)) { Write-Error "Run-Menu.ps1 not found at $runScript"; return $false }
 
     $exe = Get-WCSPowerShellExe
     $startDate = (Get-Date -Hour $Hour -Minute 0 -Second 0 -Millisecond 0)
     if ($startDate -le (Get-Date)) { $startDate = $startDate.AddDays(1) }
 
-    $trigger = New-ScheduledTaskTrigger -Daily -At $startDate -RepetitionInterval (New-TimeSpan -Days $Days) -RepetitionDuration ([TimeSpan]::MaxValue)
-    $action = New-ScheduledTaskAction -Execute $exe -Argument "-File ""$runScript"" -Profile Maximum -Apply"
-    $settings = New-ScheduledTaskSettingsSet -StartWhenOnBattery -AllowStartIfOnBatteries -WakeToRun
-    $idle = New-ScheduledTaskIdleSettings -IdleTimeout 0 -IdleDisconnectGracePeriod 0
+    $trigger = New-ScheduledTaskTrigger -Once -At $startDate -RepetitionInterval (New-TimeSpan -Days $Days) -RepetitionDuration ([TimeSpan]::MaxValue)
+    $action = New-ScheduledTaskAction -Execute $exe -Argument "-File ""$runScript"" -NonInteractive -Level 4 -Apply -AutoApprove"
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -WakeToRun
 
     if ($WhatIf) {
-        Write-Host "Would register task '$WCS_ReRunTaskName' (start: $($startDate.ToShortTimeString()), every $Days days, as SYSTEM, cmd: $exe -File $runScript -Profile Maximum -Apply)" -ForegroundColor Cyan
+        Write-Host "Would register task '$WCS_ReRunTaskName' (start: $($startDate.ToShortTimeString()), every $Days days, as SYSTEM, cmd: $exe -File $runScript -NonInteractive -Level 4 -Apply -AutoApprove)" -ForegroundColor Cyan
         return $true
     }
 

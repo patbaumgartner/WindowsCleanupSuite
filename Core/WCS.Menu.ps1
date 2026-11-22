@@ -202,9 +202,10 @@ function Invoke-WCSTopicCleanups {
             $LASTEXITCODE = $null
             $failed = $false
             try {
-                if ($script -eq 'Runners\Run-Cleanup.ps1') {
-                    # Run-Cleanup has its own preview default (no -Apply = preview).
-                    if ($Apply) { & $path -Profile $level.Profile -Apply -AllowRisky:$AllowRisky } else { & $path -Profile $level.Profile -AllowRisky:$AllowRisky }
+                if ($script -eq 'Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1') {
+                    # Profile comes from the level; LoginSafe stays on (as before).
+                    # Preview = -WhatIf, apply = run without -WhatIf.
+                    if ($Apply) { & $path -Profile $level.Profile -LoginSafe -AllowRisky:$AllowRisky } else { & $path -WhatIf -Profile $level.Profile -LoginSafe -AllowRisky:$AllowRisky }
                 } elseif ($script -eq 'Cleanups\PrivacySettings\Disable-PrivacySettings.ps1' -or $script -eq 'Cleanups\ExtremeExtras\Disable-ExtremeExtras.ps1') {
                     if ($Apply) { & $path -Level $level.Level } else { & $path -WhatIf -Level $level.Level }
                 } elseif ($script -eq 'Cleanups\WindowsUpdates\Disable-WindowsUpdates.ps1') {
@@ -265,7 +266,7 @@ function Show-WCSHelp {
 
   Levels:
     Safe (Recommended)  - Balanced engine profile, privacy, DNS, updates, power plan.
-    Balanced            - adds AI Features, OneDrive & Visual Effects.
+    Balanced            - adds AI and OneDrive topics (visual effects are in ServicesTasks).
     Aggressive          - Maximum profile: more services set Manual/Disabled.
     Extreme             - Maximum + ExtremeExtras (push, Store broker, SMS routing off).
 
@@ -280,7 +281,6 @@ function Show-WCSHelp {
     1 Run debloat (preview)          3 Updates + re-debloat afterwards
     2 Apply debloat (needs Admin)    4 Schedule auto re-run (weekly)
     5 Revert/Restore backups         6 Run audits (state/installed/services)
-    7 Legacy Restore-All (Runners\Restore-All.ps1)
     0 Exit
 
   CLI (non-interactive):
@@ -302,7 +302,6 @@ function Show-WCSActionMenu {
     Write-Host '  [4] Schedule auto re-run (weekly)' -ForegroundColor Cyan
     Write-Host '  [5] Revert / restore backups (Tools\Restore-WCSBackup.ps1)' -ForegroundColor Cyan
     Write-Host '  [6] Run audits (state / installed software)' -ForegroundColor Cyan
-    Write-Host '  [7] Legacy Restore-All (Runners\Restore-All.ps1)' -ForegroundColor Cyan
     Write-Host '  [h] Help' -ForegroundColor Cyan
     Write-Host '  [0] Exit' -ForegroundColor Cyan
     return Get-WCSMenuInput -MaxTries 4 -Prompt 'Action'
@@ -329,8 +328,7 @@ function Invoke-WCSActionMenu {
                 if (-not $updates.Success) {
                     Write-Warning "  Updates did not fully succeed ($($updates.Manager)). Skipping re-debloat."
                 } else {
-                    $profile = (Get-WCSLevelByKey $LevelKey).Profile
-                    Invoke-WCSDebloatAfterUpdates -Apply -Profile $profile
+                    Invoke-WCSDebloatAfterUpdates -Apply -Level $LevelKey
                 }
             }
             '4' {
@@ -346,24 +344,15 @@ function Invoke-WCSActionMenu {
                     if (Test-Path $path) { & $path }
                 }
             }
-            '7' {
-                Invoke-WCSTool -Tool 'Runners\Restore-All.ps1'
-            }
             'h' { Show-WCSHelp }
             default {
-                Write-Host '  Invalid or empty input - type a number between 0 and 7.' -ForegroundColor Yellow
+                Write-Host '  Invalid or empty input - type a number between 0 and 6.' -ForegroundColor Yellow
             }
         }
         if ($choice -in @('0', '') -or $null -eq $choice) {
             return
         }
     }
-}
-
-function Invoke-WCSTool {
-    param([string]$Tool)
-    $path = Join-Path (Get-SuiteRoot) $Tool
-    if (Test-Path $path) { & $path }
 }
 
 # --------------------------------------------------------------------------- main

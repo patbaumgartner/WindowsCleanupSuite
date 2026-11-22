@@ -7,10 +7,12 @@
     Features:
       - Detects available update managers (winget.exe / choco.exe / none).
       - Runs "winget upgrade --all" or "choco upgrade all" silently with logs.
-      - Re-deboates afterwards via Runners\Run-Cleanup.ps1 -Apply (removes apps that
-        updates reinstalled, e.g. wifi kill apps, and repairs update-side bloat).
+      - Re-debloats afterwards via Runners\Run-Menu.ps1 -NonInteractive -Apply (removes
+        apps that updates reinstalled, e.g. wifi kill apps, and repairs update-side bloat).
     All commands are logged to Logs\updates-*.log with timestamps.
 #>
+
+. (Join-Path $PSScriptRoot 'CleanupEngine.ps1')
 
 function Get-WCSActiveUpdateManager {
     <# Returns 'winget', 'choco', or $null when neither is available. #>
@@ -68,23 +70,24 @@ function Invoke-WCSUpdateManager {
 }
 
 function Invoke-WCSDebloatAfterUpdates {
-    <# Re-runs Run-Cleanup.ps1 -Apply (removes apps re-installed by updates). #>
+    <# Re-runs the menu non-interactively at the given level (removes apps re-installed by updates). #>
     param(
-        [ValidateSet('Balanced', 'Maximum')][string]$Profile,
+        [ValidateSet('Safe', 'Balanced', 'Aggressive', 'Extreme')][string]$Level = 'Extreme',
         [switch]$Apply
     )
 
-    $runner = Join-Path (Split-Path -Parent $PSScriptRoot) 'Runners\Run-Cleanup.ps1'
+    $menu = Join-Path (Split-Path -Parent $PSScriptRoot) 'Runners\Run-Menu.ps1'
+    if (-not (Test-Path $menu)) { Write-Error "Run-Menu.ps1 not found at $menu"; return }
     Write-Host ''
-    Write-Host "Re-debloating after updates (profile: $Profile)..." -ForegroundColor Cyan
+    Write-Host "Re-debloating after updates (level: $Level)..." -ForegroundColor Cyan
     if ($Apply) {
         if (-not (Test-SuiteIsAdmin)) {
             Write-Warning 'Re-debloating after updates needs Administrator; running preview.'
-            & $runner -Profile $Profile
+            & $menu -NonInteractive -Level $Level
         } else {
-            & $runner -Profile $Profile -Apply
+            & $menu -NonInteractive -Level $Level -Apply -AutoApprove
         }
     } else {
-        & $runner -Profile $Profile
+        & $menu -NonInteractive -Level $Level
     }
 }

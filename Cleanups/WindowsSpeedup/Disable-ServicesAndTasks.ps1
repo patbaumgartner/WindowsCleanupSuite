@@ -19,7 +19,7 @@
 
     Protected components (Intel Driver & Support Assistant, DSA tasks, etc.) are
     NEVER modified, in any profile or mode. Requires Administrator for service
-    changes. Runners\Run-Cleanup.ps1 runs this in preview mode unless -Apply.
+    changes. The menu passes -WhatIf for previews; run without -WhatIf to apply.
 
 .PARAMETER WhatIf
     Preview mode - shows what would change without touching the system.

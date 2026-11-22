@@ -38,7 +38,7 @@ function Get-SuiteManifest {
 }
 
 function Get-SuiteCleanupNames {
-    # All cleanups in canonical run order (must match Runners\Run-Cleanup.ps1).
+    # All cleanups in canonical run order (referenced by the menu topics).
     return @('StartupBloat', 'WindowsSpeedup', 'InstalledSoftware', 'WindowsAI', 'Privacy', 'Browsers', 'Network', 'PrivacySettings', 'WindowsUpdates', 'OneDrive', 'ExtremeExtras', 'TempAndJunkFiles', 'PowerPlan', 'DNSReset')
 }
 

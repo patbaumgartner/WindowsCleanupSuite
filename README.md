@@ -87,33 +87,24 @@ Perfect for scripts/CI:
 # Risky items (Network: NetBIOS off, static DNS):
 & 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -NonInteractive -Level 2 -Topics 'Network' -AllowRisky
 
-# Unified restore-all (restores Backups\RegistryRecords + every Restore-*.ps1):
-& 'WindowsCleanupSuite\Runners\Restore-All.ps1'
+# Unified restore (restores Backups\ records; preview unless -Apply):
+& 'WindowsCleanupSuite\Tools\Restore-WCSBackup.ps1' -Backups
 ```
 
 **Topic names:** `ServicesTasks`, `PrivacySettings`, `Privacy`, `Browsers`, `Network`, `AI`,
 `OneDrive`, `ExtremeExtras`, `Maintenance`, `DNS`, `WindowsUpdates`, `PowerPlan`.
 
-### Legacy entry points (still supported)
+### Direct scripts (audits & single cleanups)
+
+`Runners\Run-Menu.ps1` is the only entry point — there are no legacy runners anymore.
+Individual scripts still work standalone (all cleanups support `-WhatIf`):
 
 ```powershell
-# Classic data-driven cleanup (preview by default, -Apply applies)
-& 'WindowsCleanupSuite\Runners\Run-Cleanup.ps1' -Profile Balanced                     # preview
-& 'WindowsCleanupSuite\Runners\Run-Cleanup.ps1' -Profile Balanced -Apply            # apply
-& 'WindowsCleanupSuite\Runners\Run-Cleanup.ps1' -Profile Maximum -Apply -AllowRisky # incl. Risky entries
-
-# Monthly wrapper: preview first, ask before applying (calls the runner in-process)
-& 'WindowsCleanupSuite\Runners\Run-Monthly.ps1'
-
-# Restore everything from Backups\ in reverse run order (preview by default)
-& 'WindowsCleanupSuite\Runners\Restore-All.ps1'
-& 'WindowsCleanupSuite\Runners\Restore-All.ps1' -Apply
-
 # Read-only performance snapshot (writes Logs\<ts>-perf-<phase>.json)
 & 'WindowsCleanupSuite\Audit\Perf-Snapshot.ps1' -Phase Standalone
 
-# Direct cleanup scripts (all support -WhatIf)
-& 'WindowsCleanupSuite\Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1' -WhatIf
+# Direct cleanup script (preview with -WhatIf; apply = run without it, needs Admin)
+& 'WindowsCleanupSuite\Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1' -WhatIf -Profile Balanced
 ```
 
 ---
@@ -122,7 +113,7 @@ Perfect for scripts/CI:
 
 | Topic | What it does |
 |---|---|
-| **ServicesTasks** | Disables nonessential Windows services, scheduled tasks, startup apps (Balanced/Maximum profiles). |
+| **ServicesTasks** | Disables nonessential Windows services, scheduled tasks, startup apps and installed bloatware (Balanced/Maximum profiles). |
 | **PrivacySettings** | Disables advertising ID, tailored experiences, speech consent, location/personalization (registry). |
 | **Privacy** | Telemetry `AllowTelemetry=0`, advertising ID, activity history, CEIP/AppCompat, consumer/cloud content, ContentDeliveryManager suggested apps, WER off (Raphire-style policies). |
 | **Browsers** | Edge/Chrome `BackgroundModeEnabled=0`, Edge `StartupBoostEnabled=0`, Firefox background update + Pocket off (HKLM policies, all users). |
@@ -152,10 +143,10 @@ The suite integrates with the two standard package managers on Windows:
 . 'WindowsCleanupSuite\Core\WCS.Updates.ps1'    # dot-source the library, then:
 Invoke-WCSUpdateManager                          # runs: winget upgrade --all --silent
                                                  # or choco upgrade all -y (when winget is missing)
-Invoke-WCSDebloatAfterUpdates -Profile Balanced -Apply   # re-debloat afterwards
+Invoke-WCSDebloatAfterUpdates -Level Balanced -Apply     # re-debloat afterwards
 ```
 
-Then it **re-debloats automatically** (`Runners\Run-Cleanup.ps1 -Apply`). This matters because
+Then it **re-debloats automatically** (`Runners\Run-Menu.ps1 -NonInteractive -Level 4 -Apply`). This matters because
 app updates often re-install bloatware — the wifi kill apps, Telegram Shell, driver-managed
 updaters, etc. — and the post-update re-run removes them again.
 
@@ -180,7 +171,7 @@ Unregister-WCSReRunTask                          # remove it again
 ```
 
 Registered as `WindowsCleanupSuite_ReRun` (Task Scheduler → Task Scheduler Library → WindowsCleanupSuite_ReRun).
-Runs daily at 8 AM as SYSTEM, repeating every 7 days (changeable), calling `Runners\Run-Cleanup.ps1 -Profile Maximum -Apply`.
+Runs daily at 8 AM as SYSTEM, repeating every 7 days (changeable), calling `Runners\Run-Menu.ps1 -NonInteractive -Level 4 -Apply` (Extreme).
 
 ---
 
@@ -222,10 +213,7 @@ Run read-only audits to see current state:
 ```
 WindowsCleanupSuite/
 ├── Runners\
-│   ├── Run-Menu.ps1                 # Interactive menu entry point
-│   ├── Run-Cleanup.ps1              # Data-driven runner (preview unless -Apply; perf snapshots Before/After)
-│   ├── Run-Monthly.ps1              # Monthly wrapper (preview + ask; in-process call, no nested powershell.exe)
-│   └── Restore-All.ps1              # Restore all Backups\ records (preview unless -Apply)
+│   └── Run-Menu.ps1                 # The only entry point (interactive menu / non-interactive CLI)
 ├── Core\
 │   ├── CleanupEngine.ps1            # Shared engine: backups, registry helpers, manifest loader
 │   ├── WCS.Catalog.ps1              # Single source of truth: Levels + Topics + Cleanup mapping
@@ -268,20 +256,20 @@ WindowsCleanupSuite/
 - Validates manifest schema (entries, levels, protected patterns) for all cleanups.
 - Extends: menu-era cleanup schema checks + extension manifest checks (TempAndJunkFiles, DNSReset, PowerPlan).
 - **Menu smoke test**: runs the menu non-interactively in preview mode; exit code must be `0`.
-- **Wiring drift checks**: `Run-Cleanup.ps1` runs every cleanup, the engine run order covers all cleanups, every cleanup has a `Restore-*.ps1` (used by `Restore-All.ps1`), and `-AllowRisky` gating is present.
+- **Wiring drift checks**: the catalog maps every topic to its cleanup scripts (ServicesTasks → StartupBloat + ServicesAndTasks + InstalledSoftware), the engine run order covers all cleanups, every cleanup has a `Restore-*.ps1`, the legacy runner scripts are gone (no references anywhere in code), and `-AllowRisky` gating is present.
 - Independence check: no references to the previous project.
 
 ---
 
 ## 🔒 Safety & Reversibility
 
-- **Preview by default** — the menu never applies changes without confirmation (`-Apply`/Actions `[2]`); every runner and cleanup script supports `-WhatIf`.
+- **Preview by default** — the menu never applies changes without confirmation (`-Apply`/Actions `[2]`); every cleanup script supports `-WhatIf`.
 - **`-AllowRisky` gate** — manifest entries flagged `Risky = $true` (NetBIOS off, static DNS resolvers, VPN/Citrix services, Windows Search indexing, Connected Devices Platform) are skipped unless `-AllowRisky` is passed.
 - **System Restore point** created automatically on apply (admin required).
 - **Backups** (`Backups\`) of every changed item; restore scripts (`Restore-*.ps1`) for each cleanup.
 - **No data deletion of important items**: protected patterns (Intel DSA, drivers) are never touched; OneDrive/Dropbox/Teams/PowerToys/TeamViewer remain kept per your needs.
 - **Risky items are explicit**: `Privacy` (Raphire policies), `Network` (NetBIOS off, static DNS) — apply via `-AllowRisky` or the menu option.
-- **Perf snapshots**: `Audit\Perf-Snapshot.ps1` writes read-only before/after JSON for a/b comparison (wired into Run-Cleanup).
+- **Perf snapshots**: `Audit\Perf-Snapshot.ps1` writes read-only before/after JSON for a/b comparison (run with `-Phase Before` / `-Phase After` around a cleanup).
 - **Automatic re-runs**: scheduled task re-debloats weekly; also re-runs happen automatically after updates.
 - **Admin required** for service changes — run elevated for full effect.
 

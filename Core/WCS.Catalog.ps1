@@ -10,7 +10,8 @@
 
 function Get-WCSLevelDefinitions {
     <#
-        Levels map to Profiles used by Runners\Run-Cleanup.ps1:
+        Levels map to Profiles used by the ServicesTasks cleanup
+        (Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1):
           Safe (1) + Balanced (2) -> Balanced
           Aggressive (3) + Extreme (4) -> Maximum
         Each level's Topics with DefaultOn[LevelKey]: $true means the topic is
@@ -54,8 +55,8 @@ function Get-WCSTopicDefinitions {
             Topic       = 'ServicesTasks'
             MinLevel    = 1
             DefaultOn   = @{ Safe = $true; Balanced = $true; Aggressive = $true; Extreme = $true }
-            Cleanups    = @('Runners\Run-Cleanup.ps1')
-            Description = 'Disables nonessential services, scheduled tasks and startup apps (also visual effects).'
+            Cleanups    = @('Cleanups\StartupBloat\Disable-StartupBloat.ps1', 'Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1', 'Cleanups\InstalledSoftware\Disable-InstalledSoftware.ps1')
+            Description = 'Disables nonessential services, scheduled tasks, startup apps and installed bloatware (also visual effects).'
         },
         @{
             Topic       = 'PrivacySettings'

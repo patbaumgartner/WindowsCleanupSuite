@@ -6,8 +6,8 @@
 
 .DESCRIPTION
     Prints a report and writes a JSON snapshot to Logs\<timestamp>-perf-<phase>.json
-    so runs can be compared before/after a cleanup. Runners\Run-Cleanup.ps1 calls
-    this with -Phase Before and -Phase After. Fully read-only.
+    so runs can be compared before/after a cleanup. Run it with -Phase Before and
+    -Phase After around a cleanup run for a/b comparison. Fully read-only.
 
 .PARAMETER Phase
     Label stored with the snapshot: Before, After or Standalone (default).

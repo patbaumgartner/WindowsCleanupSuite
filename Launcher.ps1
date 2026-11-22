@@ -66,7 +66,7 @@ if ($WhatIf) {
     }
     if (-not $InstallDir) { $InstallDir = Join-Path $env:TEMP 'WindowsCleanupSuite' }
     Write-Host "  Extract to: $InstallDir"
-    if ($Launch) { Write-Host "  Launch menu: $InstallDir\Runners\Run-Menu.ps1" }
+    if ($Launch) { Write-Host '  Launch menu: Run-Menu.ps1 (located recursively in the extracted suite)' }
     exit 0
 }
 
@@ -130,6 +130,13 @@ if ($Launch) {
     & $menuPath.FullName
     exit $LASTEXITCODE
 } else {
-    Write-Host "Suite extracted to $InstallDir. Launch with: & '$InstallDir\Runners\Run-Menu.ps1'" -ForegroundColor Gray
+    # Branch archives extract with a top-level '<repo>-<branch>' folder; release
+    # zips are flat - locate the menu recursively and print the real path.
+    $menuPath = Get-ChildItem -Path $InstallDir -Recurse -Filter 'Run-Menu.ps1' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($menuPath) {
+        Write-Host "Suite extracted to $InstallDir. Launch with: & '$($menuPath.FullName)'" -ForegroundColor Gray
+    } else {
+        Write-Host "Suite extracted to $InstallDir, but Run-Menu.ps1 was not found - check the archive layout." -ForegroundColor Yellow
+    }
     exit 0
 }
