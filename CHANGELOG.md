@@ -17,6 +17,41 @@ project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 
 ## [Unreleased]
 
 ### Fixed
+- **Apply mode crashed with `The term 'if' is not recognized`** in every cleanup using
+  `Set-WCSRegistryEntry` (PrivacySettings, WindowsUpdates, PowerPlan): the backup record used
+  `(if …)` — a statement inside parentheses — which parses as a *command invocation* and only
+  throws at runtime (previews passed because `-WhatIf` returns before that line). The old
+  value/type are now computed in plain statements first. Regression test scans all `.ps1` for
+  statement-in-parens patterns (valid only as `$(…)`/`@(…)`).
+- **Menu: Enter was ignored** — `Get-WCSMenuInput` retried on empty input up to `$MaxTries`
+  times, so one Enter re-printed the prompt instead of accepting. Empty input is now returned
+  immediately: Topics = accept selection, Level = accept the default (marked `*`), Actions = exit.
+  The menu also now always exits explicitly (`exit 0` on success) so `Runners\Run-Menu.ps1`
+  cannot inherit a stale `$LASTEXITCODE` from an earlier native command.
+- **InstalledSoftware: one package failing with `Access is denied` aborted the whole script.**
+  UWP/provisioned removal and the Win32 uninstaller start are now wrapped per-item; failures
+  are warnings and the backup is kept.
+- **Launcher: stale `%TEMP%\WindowsCleanupSuite` could mix old and new files** (the silent
+  `Remove-Item` can fail on locked files, producing "Missing script" warnings). The old dir is
+  now removed with retries and, if still locked, extraction falls back to a fresh timestamped
+  directory; a sanity warning is printed if the extracted suite lacks `Cleanups\`/`Runners\`.
+- **Registry backups never captured the old value** (restore was silently broken): two latent
+  bugs in `Core\CleanupEngine.ps1`. (1) `Get-WCSRegistryValue` read the value via
+  `.$Entry.Name`, which PowerShell parses as a *chained* member access
+  `(($result).$Entry).Name` - i.e. a member named after the hashtable - so it always returned
+  `$null` and every backup record got `OldExists=false`. Now `.($Entry.Name)` (same fix in
+  `Cleanups\OneDrive\Disable-OneDrive.ps1`). (2) `Set-WCSRegistryEntry` declared
+  `[ValidateSet(...)][string]$Type` - reading an *unbound* optional `[ValidateSet]` parameter
+  throws "The variable cannot be validated..." on PS 5.1 and 7.x, so every caller that omits
+  `-Type` (PrivacySettings, WindowsUpdates, PowerPlan) failed in apply mode. The parameter is
+  now validated manually via `$PSBoundParameters`. Also fixed: the registry key is now created
+  only when the *key* is missing (`Test-Path`), not when the *value* is missing (previously
+  "A key in this path already exists"), and `Restore-WCSRegistryRecordValue` accepts
+  PSCustomObject records (from `ConvertFrom-Json`) instead of requiring `[hashtable]`, and
+  restores with the original value kind (`-Type $OldType`). Regression tests scan all `.ps1`
+  files for both broken patterns.
+
+### Fixed
 - **Launcher one-liner docs**: the README/help showed `irm <url>` alone, which only *prints*
   the script and never executes it (on any PowerShell version) — that is why the "self-executing
   download" appeared not to work. Docs now show `irm <url> | iex` (Win11Debloat style) and a
