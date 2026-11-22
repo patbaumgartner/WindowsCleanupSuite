@@ -43,11 +43,15 @@ jobs:
         run: |
           $tag = "${{ steps.tag.outputs.tag }}"
           $zip = "WindowsCleanupSuite-$tag.zip"
+          $repoRoot = (Get-Location).Path
           $files = @()
           foreach ($item in (Get-ChildItem -Path . -File -Recurse -ErrorAction SilentlyContinue)) {
             $full = $item.FullName
             if ($full -match '(^|\\)(\.git|Logs|Backups)(\\|$)') { continue }
-            $files += $full
+            # Relative paths keep the directory structure inside the zip;
+            # absolute paths would flatten every file to the archive root
+            # (same-named files like the 14 Manifest.psd1 would collide).
+            $files += $full.Substring($repoRoot.Length + 1)
           }
           Compress-Archive -Path @($files) -DestinationPath $zip -Force
           $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash
