@@ -24,12 +24,14 @@ function New-WCSZip {
         [string]$DestinationPath,
 
         # Directory to archive. Defaults to the repo root (parent of Tools\).
-        [string]$SourceRoot = (Split-Path -Parent $PSScriptRoot),
+        # NOTE: $PSScriptRoot is empty in parameter defaults on PS 5.1 - resolved in the body.
+        [string]$SourceRoot,
 
         # Directory names skipped at any depth.
         [string[]]$ExcludeDirNames = @('.git', 'Logs', 'Backups')
     )
 
+    if (-not $SourceRoot) { $SourceRoot = Split-Path -Parent $PSScriptRoot }
     $SourceRoot = (Resolve-Path -Path $SourceRoot -ErrorAction Stop).Path
     $DestinationPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DestinationPath)
     if (Test-Path -LiteralPath $DestinationPath) { Remove-Item -LiteralPath $DestinationPath -Force }

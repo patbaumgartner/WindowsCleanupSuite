@@ -17,8 +17,12 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$SuiteRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$SuiteRoot
 )
+
+# NOTE: $PSScriptRoot is EMPTY inside parameter default values on PS 5.1 -
+# resolve it in the body instead.
+if (-not $SuiteRoot) { $SuiteRoot = Split-Path -Parent $PSScriptRoot }
 
 $bad = 0
 foreach ($f in (Get-ChildItem -Path $SuiteRoot -Recurse -File -Include '*.ps1', '*.psd1' -ErrorAction SilentlyContinue)) {

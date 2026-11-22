@@ -27,8 +27,15 @@ project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 
 ### Added
 - **PS 5.1 compatibility guard**: new `Tests\Invoke-PS51ParseCheck.ps1` parses every `.ps1`/`.psd1`
   with the Windows PowerShell 5.1 parser; CI runs it via `powershell.exe` on every build and the
-  test suite runs it when available. New tests also assert the one-liner docs use `| iex` and that
-  `Launcher.ps1` contains no PS7-only operators (`??`, `?.`, `&&`, `||`).
+  test suite runs it when available. New tests also assert the one-liner docs use `| iex`, that
+  `Launcher.ps1` contains no PS7-only operators (`??`, `?.`, `&&`, `||`), and that no script uses
+  `$PSScriptRoot` inside a parameter default (it is empty there on PS 5.1 - this broke the CI
+  parse step until fixed by resolving it in the script body).
+
+### Fixed
+- `$PSScriptRoot` in parameter default values is empty on Windows PowerShell 5.1 —
+  `Tests\Invoke-PS51ParseCheck.ps1` and `Tools\New-WCSZip.ps1` now resolve it in the
+  script/function body instead.
 
 ## [1.1.0] - 2026-11-22 - legacy entry points removed
 

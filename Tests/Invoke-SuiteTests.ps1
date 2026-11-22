@@ -339,6 +339,15 @@ Test-SuiteCheck -Name 'Docs: one-liner pipes to iex in Launcher help AND README 
 Test-SuiteCheck -Name 'Launcher: #requires -Version 5.1 (loadable on Windows PowerShell 5.1)' -Pass ($launcherText -match '#requires -Version 5\.1')
 Test-SuiteCheck -Name 'Launcher: no PS7-only operators (??, ?., &&, ||)' -Pass ($launcherText -notmatch '\?\?|\?\.|&&|\|\|')
 
+# $PSScriptRoot is empty inside parameter DEFAULT values on PS 5.1 - it must only
+# be used in script bodies. Scan all suite files for the param-default pattern.
+$paramDefaultRoot = @()
+foreach ($f in @(Get-ChildItem -Path $SuiteRoot -Recurse -File -Include '*.ps1' -ErrorAction SilentlyContinue)) {
+    if ($f.FullName -match '\\\.git\\') { continue }
+    if ((Get-Content -Raw -LiteralPath $f.FullName) -match '=\s*\(Split-Path\s+-Parent\s+\$PSScriptRoot\)') { $paramDefaultRoot += $f.FullName }
+}
+Test-SuiteCheck -Name 'No $PSScriptRoot in parameter defaults (empty on PS 5.1)' -Pass ($paramDefaultRoot.Count -eq 0) -Detail ($paramDefaultRoot -join '; ')
+
 # Run the PS 5.1 parser over all files when powershell.exe is available (Windows).
 $ps51 = if ($env:OS -eq 'Windows_NT') { Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe' } else { $null }
 if ($ps51 -and (Test-Path $ps51)) {
