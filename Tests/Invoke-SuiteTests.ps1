@@ -324,10 +324,12 @@ Test-SuiteCheck -Name 'Launcher: has -ZipUrl, -InstallDir, -Launch, -WhatIf para
 Write-Host 'Running Launcher dry run (Launcher.ps1 -WhatIf)...'
 $launcherExit = $null
 if (Test-Path (Join-Path $SuiteRoot 'Launcher.ps1')) {
-    $out = & (Join-Path $SuiteRoot 'Launcher.ps1') -WhatIf 2>&1
+    # Capture ALL streams (*>&1): the launcher prints via Write-Host (information
+    # stream 6), which plain 2>&1 does not capture - that made this check fail on CI.
+    $out = & (Join-Path $SuiteRoot 'Launcher.ps1') -WhatIf *>&1
     $launcherExit = $LASTEXITCODE
     Test-SuiteCheck -Name 'Smoke: Launcher.ps1 -WhatIf exits 0' -Pass ($launcherExit -eq 0)
-    Test-SuiteCheck -Name 'Smoke: Launcher.ps1 -WhatIf prints the dry-run (does not download)' -Pass (($out | Out-String) -match 'dry run')
+    Test-SuiteCheck -Name 'Smoke: Launcher.ps1 -WhatIf prints the dry-run (does not download)' -Pass ((($out | Out-String) -replace '\x1b\[[0-9;]*m', '') -match 'dry run')
 }
 
 # --- 5c. Launcher one-liner docs + PS 5.1 compatibility --------------------------------
