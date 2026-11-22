@@ -42,7 +42,9 @@ foreach ($entry in @($manifest.Entries)) {
                 Write-Host "  [od]      Would remove Run entry: $($entry.Name)"
                 continue
             }
-            $value = (Get-ItemProperty -Path $entry.Path -Name $entry.Name -ErrorAction SilentlyContinue).$entry.Name
+            # .($entry.Name), NOT .$entry.Name - the chained form looks up a member
+            # named after the entry object itself and always yields $null.
+            $value = (Get-ItemProperty -Path $entry.Path -Name $entry.Name -ErrorAction SilentlyContinue).($entry.Name)
             New-SuiteBackupFile -BackupRoot $backupRoot -FileName "run_$(Get-SuiteSafeFileName $entry.Name).txt" -Record @{
                 Type = 'RunEntry'; Path = $entry.Path; Name = $entry.Name; Value = [string]$value; Reason = $entry.Reason
             }

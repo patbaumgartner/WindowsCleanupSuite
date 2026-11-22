@@ -368,7 +368,9 @@ function Get-WCSRegistryValue {
     param([Parameter(Mandatory = $true)]$Entry)
 
     try {
-        $value = (Get-ItemProperty -Path $Entry.Path -Name $Entry.Name -ErrorAction Stop).$Entry.Name
+        # NOTE: must be .($Entry.Name) - a chained .$Entry.Name parses as
+        # (($result).$Entry).Name, i.e. a member named after the hashtable -> always $null.
+        $value = (Get-ItemProperty -Path $Entry.Path -Name $Entry.Name -ErrorAction Stop).($Entry.Name)
         if ($null -eq $value) {
             return [pscustomobject]@{ Exists = $false; Value = $null; Type = '' }
         }
@@ -397,7 +399,10 @@ function Set-WCSRegistryEntry {
     param(
         [Parameter(Mandatory = $true)]$Entry,
         [Parameter(Mandatory = $true)][string]$BackupRoot,
-        [ValidateSet('DWord', 'String', 'QWord')]
+        # NOTE: no [ValidateSet] here - reading an UNBOUND optional [ValidateSet]
+        # parameter throws ("The variable cannot be validated because the value is
+        # not a valid value for the Type variable") on PS 5.1 and 7.x. Callers omit
+        # -Type on purpose; it is validated manually below via $PSBoundParameters.
         [string]$Type
     )
 
@@ -417,22 +422,48 @@ function Set-WCSRegistryEntry {
         return
     }
 
+    # NOTE: compute old value/type BEFORE the hashtable - `(if ...)` (statement in
+    # parentheses) parses as a command invocation and throws at runtime:
+    # "The term 'if' is not recognized" on PS 5.1 AND 7.x. Only $(if ...) is safe.
+    $oldValue = $null
+    $oldType = ''
+    if ($current.Exists) {
+        if ($current.Value -is [byte[]]) { $oldValue = [Convert]::ToBase64String($current.Value) } else { $oldValue = $current.Value }
+        $oldType = Get-WCSRegistryType $current.Value
+    }
     $fileName = "reg_$(Get-SuiteSafeFileName "$($Entry.Path)\$($Entry.Name)").txt"
     New-SuiteBackupFile -BackupRoot $BackupRoot -FileName $fileName -Record @{
         Type = 'Registry'
         Path = $Entry.Path
         Name = $Entry.Name
         OldExists = [bool]$current.Exists
-        OldValue = (if ($current.Exists) { if ($current.Value -is [byte[]]) { [Convert]::ToBase64String($current.Value) } else { $current.Value } } else { $null })
-        OldType = (if ($current.Exists) { Get-WCSRegistryType $current.Value } else { '' })
+        OldValue = $oldValue
+        OldType = $oldType
         Reason = $Entry.Reason
     }
 
     try {
-        if (-not $current.Exists) {
-            New-Item -Path $Entry.Path -ErrorAction Stop | Out-Null
+        # Create the KEY only when the key itself is missing - the value may not
+        # exist yet while the key does ("A key in this path already exists").
+        if (-not (Test-Path -LiteralPath $Entry.Path)) {
+            New-Item -Path $Entry.Path -Force -ErrorAction Stop | Out-Null
         }
-        $type = $Type
+        # Determine the value type: explicit -Type (validated), else $Entry.Type,
+        # else inferred from the value. Never read $Type when unbound - see param note.
+        $type = ''
+        if ($PSBoundParameters.ContainsKey('Type')) {
+            $type = [string]$PSBoundParameters['Type']
+            if ($type -notin @('DWord', 'String', 'QWord', 'ExpandString', 'MultiString', 'Binary')) {
+                Write-Warning "  [reg]     Invalid -Type '$type' for $($Entry.Path)\$($Entry.Name) - inferring from value instead"
+                $type = ''
+            }
+        }
+        if ([string]::IsNullOrWhiteSpace($type)) {
+            $entryType = $null
+            if ($Entry -is [System.Collections.IDictionary]) { if ($Entry.Contains('Type')) { $entryType = $Entry['Type'] } }
+            elseif ($null -ne $Entry.PSObject.Properties['Type']) { $entryType = $Entry.PSObject.Properties['Type'].Value }
+            if (-not [string]::IsNullOrWhiteSpace([string]$entryType)) { $type = [string]$entryType }
+        }
         if ([string]::IsNullOrWhiteSpace($type)) { $type = Get-WCSRegistryType $Entry.Value }
         Set-ItemProperty -Path $Entry.Path -Name $Entry.Name -Value $Entry.Value -Type $type -ErrorAction Stop
         Write-Host "  [reg]     Set: $($Entry.Path)\$($Entry.Name) = $($Entry.Value) ($type)"
@@ -446,14 +477,22 @@ function Restore-WCSRegistryRecordValue {
         Restores a registry value from a backup record produced by Set-WCSRegistryEntry
         (Type='Registry', OldExists, OldValue, OldType). Returns $true when restored.
     #>
-    param([Parameter(Mandatory = $true)][hashtable]$Record)
+    # NOTE: untyped on purpose - callers pass records from Get-SuiteBackupRecords,
+    # which are PSCustomObject (ConvertFrom-Json); a [hashtable] constraint would
+    # fail parameter binding at runtime.
+    param([Parameter(Mandatory = $true)]$Record)
 
     if (-not $Record.OldExists) { return $false }
     $value = $Record.OldValue
     if ($Record.OldType -eq 'Binary' -and $value -isnot $null -and $value -is [string]) {
         $value = [byte[]][Convert]::FromBase64String($value)
     }
-    Set-ItemProperty -Path $Record.Path -Name $Record.Name -Value $value -ErrorAction Stop
+    $oldType = [string]$Record.OldType
+    if (-not [string]::IsNullOrWhiteSpace($oldType)) {
+        Set-ItemProperty -Path $Record.Path -Name $Record.Name -Value $value -Type $oldType -ErrorAction Stop
+    } else {
+        Set-ItemProperty -Path $Record.Path -Name $Record.Name -Value $value -ErrorAction Stop
+    }
     return $true
 }
 
