@@ -359,6 +359,57 @@ if ($ps51 -and (Test-Path $ps51)) {
     Test-SuiteCheck -Name 'PS 5.1 parser accepts all suite files (skipped: no powershell.exe)' -Pass $true
 }
 
+# --- 5d. Runtime-safe expressions (statements in parens throw at RUNTIME on 5.1+7) ------
+# A statement used as an expression must be wrapped in $(...) or @(...); a bare
+# "(if ...)" parses as a command invocation and fails with "The term 'if' is not
+# recognized" when the line executes (apply mode). Scan comment-stripped code only
+# (comments and this test's own pattern strings would false-positive).
+function Get-SuiteCodeWithoutComments {
+    param([string]$Path)
+    return ((Get-Content -LiteralPath $Path) -replace '#.*$', '') -join "`n"
+}
+$parenStatement = @()
+$dotVarChained = @()
+foreach ($f in @(Get-ChildItem -Path $SuiteRoot -Recurse -File -Include '*.ps1' -ErrorAction SilentlyContinue)) {
+    if ($f.FullName -match '\\\.git\\') { continue }
+    $code = Get-SuiteCodeWithoutComments -Path $f.FullName
+    # statement-in-parens in expression position: after = , return or at line start
+    if ($code -match '(?:^|[=,]|\breturn)\s*\((?:if|switch|foreach|while|for)\b') { $parenStatement += $f.FullName }
+    # chained dynamic member .$var.prop parses as (($obj).$var).prop -> always $null
+    if ($code -match '\.\$\w+\.\w+') { $dotVarChained += $f.FullName }
+}
+Test-SuiteCheck -Name 'No statement-in-parens (if/switch/foreach/...) - throws at runtime on PS 5.1 AND 7.x' -Pass ($parenStatement.Count -eq 0) -Detail ($parenStatement -join '; ')
+$dotVarName = 'No chained dynamic member access (dot-' + '$var' + '.prop) - always yields $null; use the parenthesized form'
+Test-SuiteCheck -Name $dotVarName -Pass ($dotVarChained.Count -eq 0) -Detail ($dotVarChained -join '; ')
+
+# An UNBOUND optional [ValidateSet] parameter throws on variable access (PS 5.1 + 7.x).
+# Optional ValidateSet params must be read via $PSBoundParameters only.
+$engineText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Core\CleanupEngine.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Engine: Set-WCSRegistryEntry has no [ValidateSet] on optional -Type (unbound read throws)' -Pass (
+    $engineText -match '\[string\]\$Type' -and $engineText -notmatch '\[ValidateSet\([^\)]*\)\]\s*\r?\n\s*\[string\]\$Type')
+Test-SuiteCheck -Name 'Engine: -Type read via $PSBoundParameters (safe when unbound) and key created via Test-Path' -Pass (
+    $engineText -match '\$PSBoundParameters\.ContainsKey\(''Type''\)' -and $engineText -match 'Test-Path -LiteralPath \$Entry\.Path')
+Test-SuiteCheck -Name 'Engine: Get-WCSRegistryValue reads value via .($Entry.Name)' -Pass (
+    $engineText -match '\.\(\$Entry\.Name\)')
+
+# --- 5e. Menu: Enter must be accepted immediately (not retried) ------------------------
+$menuText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Core\WCS.Menu.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Menu: Get-WCSMenuInput returns empty string immediately (Enter = accept, no retry loop)' -Pass (
+    $menuText -match 'if \(\$null -eq \$value\) \{ return \$null \}' -and $menuText -match 'return \(\[string\]\$value\)\.Trim\(\)')
+$topicEnter = '$input -eq ' + "''" + ') { return $selection }'
+$levelEnter = '$choice -eq ' + "''" + ') { return $defaultKey }'
+Test-SuiteCheck -Name 'Menu: topic menu accepts empty input as "accept selection"' -Pass ($menuText -match [regex]::Escape($topicEnter))
+Test-SuiteCheck -Name 'Menu: level menu treats Enter as the default level' -Pass ($menuText -match [regex]::Escape($levelEnter))
+Test-SuiteCheck -Name 'Menu: always exits explicitly (exit 0 on success - no stale $LASTEXITCODE leak to Run-Menu)' -Pass ($menuText -match '(?m)^exit 0\s*$')
+
+# --- 5f. Failure isolation + launcher hygiene ------------------------------------------
+$instSoft = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\InstalledSoftware\Disable-InstalledSoftware.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'InstalledSoftware: UWP removal is per-app try/catch (one denied package cannot abort the run)' -Pass (
+    $instSoft -match 'Could not remove UWP app' -and $instSoft -match 'Could not remove provisioned app' -and $instSoft -match 'Could not start uninstaller')
+Test-SuiteCheck -Name 'Launcher: wipes old install dir with retry and falls back to a fresh dir when locked' -Pass (
+    $launcherText -match 'was locked - using a fresh dir' -and $launcherText -match 'for \(\$i = 0; \$i -lt 3')
+Test-SuiteCheck -Name 'Launcher: warns when extracted suite lacks Cleanups\\ or Runners\\' -Pass ($launcherText -match 'looks incomplete')
+
 # --- 6. Independence from the previous project ---------------------------------------
 $previousProjectRefs = @('run-full-debloat', 'run-monthly-debloat', 'startup-bloat', 'windows-speedup')
 $thisFile = Join-Path $PSScriptRoot 'Invoke-SuiteTests.ps1'
