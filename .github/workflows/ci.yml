@@ -28,6 +28,17 @@ jobs:
           if ($bad -gt 0) { Write-Host "$bad file(s) with parse errors"; exit 1 }
           Write-Host "All files parse OK"
 
+      - name: Parse with Windows PowerShell 5.1 parser (legacy shell compat)
+        shell: pwsh
+        run: |
+          $ps51 = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          if (Test-Path $ps51) {
+            & $ps51 -NoProfile -ExecutionPolicy Bypass -File Tests\Invoke-PS51ParseCheck.ps1
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          } else {
+            Write-Host 'Windows PowerShell 5.1 not present on this runner - skipping'
+          }
+
       - name: Run structural tests
         shell: pwsh
         run: pwsh -NoProfile -File Tests\Invoke-SuiteTests.ps1

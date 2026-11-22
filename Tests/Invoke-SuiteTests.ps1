@@ -236,7 +236,7 @@ Test-SuiteCheck -Name 'Extension: PowerPlan has PowerPlans' -Pass (@($powerManif
 foreach ($rel in @(
     'Runners\Run-Menu.ps1',
     'Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1', 'Audit\Audit-RunningServices.ps1', 'Audit\Check-SystemHealth.ps1', 'Audit\Perf-Snapshot.ps1',
-    'Tests\Invoke-SuiteTests.ps1',
+    'Tests\Invoke-SuiteTests.ps1', 'Tests\Invoke-PS51ParseCheck.ps1',
     'Core\CleanupEngine.ps1', 'Core\WCS.Catalog.ps1', 'Core\WCS.Menu.ps1', 'Core\WCS.Updates.ps1', 'Core\WCS.Scheduler.ps1',
     'Tools\Restore-WCSBackup.ps1', 'Tools\New-WCSZip.ps1', 'Launcher.ps1',
     'LICENSE', 'CHANGELOG.md', 'VERSION', 'README.md'
@@ -327,6 +327,25 @@ if (Test-Path (Join-Path $SuiteRoot 'Launcher.ps1')) {
     $out = & (Join-Path $SuiteRoot 'Launcher.ps1') -WhatIf 2>&1
     $launcherExit = $LASTEXITCODE
     Test-SuiteCheck -Name 'Smoke: Launcher.ps1 -WhatIf exits 0' -Pass ($launcherExit -eq 0)
+    Test-SuiteCheck -Name 'Smoke: Launcher.ps1 -WhatIf prints the dry-run (does not download)' -Pass (($out | Out-String) -match 'dry run')
+}
+
+# --- 5c. Launcher one-liner docs + PS 5.1 compatibility --------------------------------
+$launcherText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Launcher.ps1') -ErrorAction SilentlyContinue
+$readmeText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'README.md') -ErrorAction SilentlyContinue
+$oneLiner = 'irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 | iex'
+Test-SuiteCheck -Name 'Docs: one-liner pipes to iex in Launcher help AND README (plain irm never executes)' -Pass (
+    $launcherText -match [regex]::Escape($oneLiner) -and $readmeText -match [regex]::Escape($oneLiner))
+Test-SuiteCheck -Name 'Launcher: #requires -Version 5.1 (loadable on Windows PowerShell 5.1)' -Pass ($launcherText -match '#requires -Version 5\.1')
+Test-SuiteCheck -Name 'Launcher: no PS7-only operators (??, ?., &&, ||)' -Pass ($launcherText -notmatch '\?\?|\?\.|&&|\|\|')
+
+# Run the PS 5.1 parser over all files when powershell.exe is available (Windows).
+$ps51 = if ($env:OS -eq 'Windows_NT') { Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe' } else { $null }
+if ($ps51 -and (Test-Path $ps51)) {
+    & $ps51 -NoProfile -ExecutionPolicy Bypass -File (Join-Path $SuiteRoot 'Tests\Invoke-PS51ParseCheck.ps1') -SuiteRoot $SuiteRoot | Out-Host
+    Test-SuiteCheck -Name 'PS 5.1 parser accepts all suite files' -Pass ($LASTEXITCODE -eq 0)
+} else {
+    Test-SuiteCheck -Name 'PS 5.1 parser accepts all suite files (skipped: no powershell.exe)' -Pass $true
 }
 
 # --- 6. Independence from the previous project ---------------------------------------
