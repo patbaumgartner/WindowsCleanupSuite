@@ -63,4 +63,4 @@ jobs:
           $sha = "$zip.SHA256"
           $title = "WindowsCleanupSuite $tag"
           $assets = @((Join-Path $env:GITHUB_WORKSPACE $zip), (Join-Path $env:GITHUB_WORKSPACE $sha))
-          gh release create $tag --title $title --notes-from-file CHANGELOG.md -R '${{ github.repository }}' @assets
+          gh release create $tag --title $title --notes-file CHANGELOG.md -R ${{ github.repository }} $assets

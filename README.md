@@ -41,8 +41,8 @@ There are many debloat scripts, but none combine what this project offers:
 Walk through:
 
 1. **Choose Level** — `1`-`4` or `Safe/Balanced/Aggressive/Extreme`:
-   - **Safe (Recommended)** — Balanced engine, privacy, DNS, updates, power plan.
-   - **Balanced** — adds AI, OneDrive, Visual Effects.
+   - **Safe (Recommended)** — Balanced engine + ServicesTasks, PrivacySettings, Privacy, Browsers, Network, Maintenance, DNS, WindowsUpdates, PowerPlan.
+   - **Balanced** — Safe + AI and OneDrive topics (visual effects are part of ServicesTasks).
    - **Aggressive** — Maximum profile: more services set to Manual/Disabled.
    - **Extreme** — Maximum + ExtremeExtras (WpnUserService, StoreBroker, etc.).
 2. **Choose Topics** — toggle the areas you want (spaces/numbers/[a]ll/[n]one, Enter to accept).
@@ -137,10 +137,10 @@ Perfect for scripts/CI:
 
 ### Level deep-dive
 
-- **Safe (Level 1)** — Balanced profile, PrivacySettings basics, WindowsUpdates, Maintenance, DNS, PowerPlan.
-- **Balanced (Level 2)** — Safe + AI, OneDrive + visual effects toggles.
+- **Safe (Level 1)** — Balanced profile + ServicesTasks, PrivacySettings, Privacy, Browsers, Network, Maintenance, DNS, WindowsUpdates, PowerPlan (all default-on).
+- **Balanced (Level 2)** — Safe + AI and OneDrive topics.
 - **Aggressive (Level 3)** — Maximum profile (more services disabled) + everything above.
-- **Extreme (Level 4)** — Maximum + ExtremeExtras + telemetry opt-outs.
+- **Extreme (Level 4)** — Maximum + ExtremeExtras (push, Store broker, SMS routing fully disabled).
 
 ---
 
@@ -149,8 +149,10 @@ Perfect for scripts/CI:
 The suite integrates with the two standard package managers on Windows:
 
 ```powershell
-& 'WindowsCleanupSuite\Core\WCS.Updates.ps1'   # runs: winget upgrade --all --silent
-# or choco upgrade all -y (when winget is not available)
+. 'WindowsCleanupSuite\Core\WCS.Updates.ps1'    # dot-source the library, then:
+Invoke-WCSUpdateManager                          # runs: winget upgrade --all --silent
+                                                 # or choco upgrade all -y (when winget is missing)
+Invoke-WCSDebloatAfterUpdates -Profile Balanced -Apply   # re-debloat afterwards
 ```
 
 Then it **re-debloats automatically** (`Runners\Run-Cleanup.ps1 -Apply`). This matters because
@@ -172,8 +174,9 @@ Logs for updates: `Logs\updates-*.log`.
 One command registers a scheduled task so the machine gets re-debloated automatically:
 
 ```powershell
-& 'WindowsCleanupSuite\Core\WCS.Scheduler.ps1' -RegisterDays 7 -Hour 8
-& 'WindowsCleanupSuite\Core\WCS.Scheduler.ps1' -Unregister
+. 'WindowsCleanupSuite\Core\WCS.Scheduler.ps1'   # dot-source the library, then:
+Register-WCSReRunTask -Days 7 -Hour 8            # register the re-run task
+Unregister-WCSReRunTask                          # remove it again
 ```
 
 Registered as `WindowsCleanupSuite_ReRun` (Task Scheduler → Task Scheduler Library → WindowsCleanupSuite_ReRun).

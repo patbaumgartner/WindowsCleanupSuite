@@ -29,6 +29,8 @@ project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 
 - **Audit\Audit-InstalledSoftware.ps1**: fixed operator-precedence bug (`-not $x -contains 'y'` never skipped entries without DisplayName).
 - **Core\WCS.Catalog.ps1**: `ConvertFrom-WCSLevelInput` error messages referenced `$Input` (empty) instead of the actual input.
 - **Performance**: full `Get-Service`/`Get-ScheduledTask` enumerations are now cached per session (`Get-SuiteCachedServices`/`Get-SuiteCachedTasks`) — the Balanced preview ran ~6.5 min slower than needed because every manifest entry re-enumerated all services/tasks.
+- **release.yml**: `gh release create` used `--notes-from-file`, which does not exist (current gh CLI: `-F/--notes-file`) — every tag release failed at the last step. Fixed to `--notes-file CHANGELOG.md`.
+- **README**: documented `Core\WCS.Updates.ps1` / `Core\WCS.Scheduler.ps1` as directly runnable with switches — they are function libraries; corrected to dot-source + `Invoke-WCSUpdateManager` / `Register-WCSReRunTask` usage. Level descriptions aligned with `Core\WCS.Catalog.ps1` (Safe default topics include Privacy/Browsers/Network; visual effects live in ServicesTasks).
 
 ### Added
 
