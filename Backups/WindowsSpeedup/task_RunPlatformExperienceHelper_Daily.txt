@@ -1,8 +1,0 @@
-{
-  "State": 1,
-  "Reason": "Google platform experience helper daily",
-  "Type": "Task",
-  "Enabled": false,
-  "TaskName": "RunPlatformExperienceHelper_Daily",
-  "TaskPath": "\\GoogleUserPEH\\"
-}

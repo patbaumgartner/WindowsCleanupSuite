@@ -1,6 +1,0 @@
-{
-  "Hive": "HKCU",
-  "Name": "OneDrive",
-  "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-  "Value": "\"C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe\" /background"
-}

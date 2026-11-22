@@ -1,6 +1,0 @@
-{
-  "Type": "Service",
-  "StartType": 3,
-  "Name": "WpnService",
-  "Reason": "Windows Push Notification Services (WNS)"
-}

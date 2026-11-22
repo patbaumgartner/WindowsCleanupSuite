@@ -1,8 +1,0 @@
-{
-  "State": 1,
-  "Reason": "Google platform experience helper on unlock",
-  "Type": "Task",
-  "Enabled": false,
-  "TaskName": "RunPlatformExperienceHelperOnUnlock",
-  "TaskPath": "\\GoogleUserPEH\\"
-}

@@ -1,6 +1,0 @@
-{
-  "Type": "Service",
-  "StartType": 3,
-  "Name": "PCManager Service Store",
-  "Reason": "Microsoft PC Manager background service"
-}

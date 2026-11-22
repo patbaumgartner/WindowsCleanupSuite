@@ -1,8 +1,0 @@
-{
-  "PreviousValue": 0,
-  "Reason": "Hide Copilot button on taskbar",
-  "Type": "Registry",
-  "NewValue": 0,
-  "RegistryKey": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-  "Name": "ShowCopilotButton"
-}

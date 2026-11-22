@@ -1,6 +1,0 @@
-{
-  "Type": "Service",
-  "StartType": 3,
-  "Name": "wercplsupport",
-  "Reason": "Windows Error Reporting Control Panel Help"
-}

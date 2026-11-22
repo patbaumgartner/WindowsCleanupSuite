@@ -1,6 +1,0 @@
-{
-  "Hive": "HKLM",
-  "Name": "Dropbox",
-  "Path": "HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run",
-  "Value": "\"C:\\Program Files (x86)\\Dropbox\\Client\\Dropbox.exe\" /systemstartup"
-}

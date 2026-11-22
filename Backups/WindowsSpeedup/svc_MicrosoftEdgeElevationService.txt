@@ -1,6 +1,0 @@
-{
-  "Type": "Service",
-  "StartType": 3,
-  "Name": "MicrosoftEdgeElevationService",
-  "Reason": "Microsoft Edge Elevation Service"
-}

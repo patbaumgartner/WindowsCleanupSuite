@@ -3,3 +3,4 @@ Logs/
 *.rej
 *.zip
 Config/UserPreferences.json
+Backups/

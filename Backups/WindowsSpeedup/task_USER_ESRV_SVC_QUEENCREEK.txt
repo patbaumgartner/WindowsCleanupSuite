@@ -1,8 +1,0 @@
-{
-  "State": 1,
-  "Reason": "Intel ESRV per-user task",
-  "Type": "Task",
-  "Enabled": false,
-  "TaskName": "USER_ESRV_SVC_QUEENCREEK",
-  "TaskPath": "\\"
-}

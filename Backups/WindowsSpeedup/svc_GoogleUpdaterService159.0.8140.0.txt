@@ -1,6 +1,0 @@
-{
-  "Type": "Service",
-  "StartType": 3,
-  "Name": "GoogleUpdaterService159.0.8140.0",
-  "Reason": "Google updater service"
-}

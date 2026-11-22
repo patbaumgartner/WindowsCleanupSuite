@@ -1,6 +1,0 @@
-{
-  "Hive": "HKCU",
-  "Name": "Microsoft.Lists",
-  "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-  "Value": "C:\\Program Files\\Microsoft OneDrive\\26.204.1019.0007\\OneDrive.Sync.Service.exe"
-}

@@ -1,8 +1,0 @@
-{
-  "PreviousValue": 2,
-  "Reason": "Disable Chrome Gemini search",
-  "Type": "Registry",
-  "NewValue": 2,
-  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
-  "Name": "FindAndFillWithGeminiSettings"
-}

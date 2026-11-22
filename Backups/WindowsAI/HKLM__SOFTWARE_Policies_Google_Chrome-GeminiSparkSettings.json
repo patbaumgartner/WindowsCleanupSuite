@@ -1,8 +1,0 @@
-{
-  "PreviousValue": 1,
-  "Reason": "Disable Chrome Gemini spark",
-  "Type": "Registry",
-  "NewValue": 1,
-  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
-  "Name": "GeminiSparkSettings"
-}

@@ -1,8 +1,0 @@
-{
-  "State": 1,
-  "Reason": "Maps Update",
-  "Type": "Task",
-  "Enabled": false,
-  "TaskName": "MapsUpdateTask",
-  "TaskPath": "\\Microsoft\\Windows\\Maps\\"
-}

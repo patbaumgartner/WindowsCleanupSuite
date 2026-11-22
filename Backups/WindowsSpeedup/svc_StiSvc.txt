@@ -1,6 +1,0 @@
-{
-  "Type": "Service",
-  "StartType": 3,
-  "Name": "StiSvc",
-  "Reason": "Windows Image Acquisition (scanner support)"
-}

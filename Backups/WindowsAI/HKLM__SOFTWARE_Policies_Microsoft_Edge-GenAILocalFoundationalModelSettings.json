@@ -1,8 +1,0 @@
-{
-  "PreviousValue": 1,
-  "Reason": "Disable AI local foundational model (Edge)",
-  "Type": "Registry",
-  "NewValue": 1,
-  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-  "Name": "GenAILocalFoundationalModelSettings"
-}

@@ -1,8 +1,0 @@
-{
-  "State": 1,
-  "Reason": "Intel telemetry scheduled task",
-  "Type": "Task",
-  "Enabled": false,
-  "TaskName": "Intel Telemetry 3",
-  "TaskPath": "\\Intel\\"
-}

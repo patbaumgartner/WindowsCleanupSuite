@@ -1,8 +1,0 @@
-{
-  "State": 1,
-  "Reason": "Firefox default browser agent",
-  "Type": "Task",
-  "Enabled": false,
-  "TaskName": "Firefox Default Browser Agent 308046B0AF4A39CB",
-  "TaskPath": "\\Mozilla\\"
-}

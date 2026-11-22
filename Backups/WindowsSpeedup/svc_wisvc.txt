@@ -1,6 +1,0 @@
-{
-  "Type": "Service",
-  "StartType": 3,
-  "Name": "wisvc",
-  "Reason": "Windows Insiders Service"
-}

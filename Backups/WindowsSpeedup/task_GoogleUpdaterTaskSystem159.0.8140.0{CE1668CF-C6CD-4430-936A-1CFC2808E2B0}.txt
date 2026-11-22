@@ -1,8 +1,0 @@
-{
-  "State": 1,
-  "Reason": "Google updater scheduled task",
-  "Type": "Task",
-  "Enabled": false,
-  "TaskName": "GoogleUpdaterTaskSystem159.0.8140.0{CE1668CF-C6CD-4430-936A-1CFC2808E2B0}",
-  "TaskPath": "\\GoogleSystem\\GoogleUpdater\\"
-}

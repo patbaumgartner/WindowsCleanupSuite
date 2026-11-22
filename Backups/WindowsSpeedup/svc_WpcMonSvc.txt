@@ -1,6 +1,0 @@
-{
-  "Type": "Service",
-  "StartType": 3,
-  "Name": "WpcMonSvc",
-  "Reason": "Windows PushToInstall Service (telemetry)"
-}

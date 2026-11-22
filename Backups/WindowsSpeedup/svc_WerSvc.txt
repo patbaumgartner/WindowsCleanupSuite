@@ -1,6 +1,0 @@
-{
-  "Type": "Service",
-  "StartType": 3,
-  "Name": "WerSvc",
-  "Reason": "Windows Error Reporting Service"
-}

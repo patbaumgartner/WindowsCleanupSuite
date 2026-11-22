@@ -1,8 +1,0 @@
-{
-  "PreviousValue": 1,
-  "Reason": "Disable Copilot service (all users)",
-  "Type": "Registry",
-  "NewValue": 1,
-  "RegistryKey": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsCopilot",
-  "Name": "TurnOffWindowsCopilot"
-}

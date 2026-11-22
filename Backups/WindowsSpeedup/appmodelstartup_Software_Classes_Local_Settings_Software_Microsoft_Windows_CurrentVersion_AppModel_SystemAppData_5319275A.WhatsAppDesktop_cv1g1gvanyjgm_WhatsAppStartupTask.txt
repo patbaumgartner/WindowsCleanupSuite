@@ -1,9 +1,0 @@
-{
-  "Path": "HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm\\WhatsAppStartupTask",
-  "State": 1,
-  "Type": "AppModelStartup",
-  "Reason": "WhatsApp startup task",
-  "LastDisabledTime": "",
-  "Name": "State",
-  "UserEnabledStartupOnce": ""
-}

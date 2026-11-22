@@ -1,8 +1,0 @@
-{
-  "State": 3,
-  "Reason": "Dropbox updater scheduled task",
-  "Type": "Task",
-  "Enabled": true,
-  "TaskName": "DropboxUpdaterTaskSystem123.0.6299.152{4496B19C-43C7-479A-B04F-BD19443FBEEF}",
-  "TaskPath": "\\DropboxSystem\\DropboxUpdater\\"
-}

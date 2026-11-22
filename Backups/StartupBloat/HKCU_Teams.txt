@@ -1,6 +1,0 @@
-{
-  "Hive": "HKCU",
-  "Name": "Teams",
-  "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-  "Value": "\"C:\\Users\\patbaumgartner\\AppData\\Local\\Microsoft\\WindowsApps\\MSTeams_8wekyb3d8bbwe\\ms-teams.exe\" msteams:system-initiated"
-}

@@ -1,6 +1,0 @@
-{
-  "Type": "Service",
-  "StartType": 2,
-  "Name": "DropboxUpdaterInternalService136.0.7068.317",
-  "Reason": "Dropbox updater internal service"
-}

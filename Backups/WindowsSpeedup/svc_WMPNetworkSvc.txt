@@ -1,6 +1,0 @@
-{
-  "Type": "Service",
-  "StartType": 3,
-  "Name": "WMPNetworkSvc",
-  "Reason": "Windows Media Player Network Sharing Service"
-}

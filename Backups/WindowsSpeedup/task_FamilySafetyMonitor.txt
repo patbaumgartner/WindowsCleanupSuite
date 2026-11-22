@@ -1,8 +1,0 @@
-{
-  "State": 1,
-  "Reason": "Family Safety Monitor",
-  "Type": "Task",
-  "Enabled": false,
-  "TaskName": "FamilySafetyMonitor",
-  "TaskPath": "\\Microsoft\\Windows\\Shell\\"
-}

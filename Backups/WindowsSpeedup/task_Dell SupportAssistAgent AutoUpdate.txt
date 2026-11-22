@@ -1,8 +1,0 @@
-{
-  "State": 1,
-  "Reason": "Dell SupportAssist auto-update task",
-  "Type": "Task",
-  "Enabled": false,
-  "TaskName": "Dell SupportAssistAgent AutoUpdate",
-  "TaskPath": "\\"
-}
