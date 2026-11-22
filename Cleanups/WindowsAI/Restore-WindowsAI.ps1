@@ -18,18 +18,17 @@ $backupRoot = Get-SuiteBackupRoot -CleanupName 'WindowsAI'
 
 foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Object { $_.Type -eq 'Registry' })) {
     if (-not $record.RegistryKey -or -not $record.Name) { Write-Warning "Malformed backup record"; continue }
-    if (-not (Test-Path $record.RegistryKey)) { Write-Warning "  Restore: path not found: $($record.RegistryKey)"; continue }
     if (-not $PSCmdlet.ShouldProcess($record.RegistryKey, "Restore $($record.Name)")) { Write-Host "  Would restore: $($record.RegistryKey)\$($record.Name)"; continue }
     try {
-        if ($null -ne $record.PreviousValue) {
-            Set-ItemProperty -Path $record.RegistryKey -Name $record.Name -Value $record.PreviousValue -Type DWord -ErrorAction Stop
+        if (-not (Test-Path $record.RegistryKey)) { New-Item -Path $record.RegistryKey -Force | Out-Null }
+        if ($record.HadPrevious -and $null -ne $record.PreviousValue) {
+            $type = if ($record.ValueType) { $record.ValueType } else { 'DWord' }
+            Set-ItemProperty -Path $record.RegistryKey -Name $record.Name -Value $record.PreviousValue -Type $type -ErrorAction Stop
         } else {
             Remove-ItemProperty -Path $record.RegistryKey -Name $record.Name -ErrorAction SilentlyContinue
         }
         Write-Host "  Restored: $($record.RegistryKey)\$($record.Name)"
     } catch {
-        Write-Warning "  Failed: $($_.Exception.Message)"
+        Write-Warning "  Restore failed: $($record.RegistryKey)\$($record.Name) - $($_.Exception.Message)"
     }
 }
-
-Write-Host "Done."

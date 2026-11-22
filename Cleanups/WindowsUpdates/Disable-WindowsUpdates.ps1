@@ -13,12 +13,19 @@
 .PARAMETER WhatIf
     Preview mode - shows what would change without touching the system.
 
+.PARAMETER Level
+    Menu level (1-4). Registry entries with a higher Level than this are skipped
+    (default 4 = apply everything).
+
 .EXAMPLE
     & 'WindowsCleanupSuite\Cleanups\WindowsUpdates\Disable-WindowsUpdates.ps1'
     & 'WindowsCleanupSuite\Cleanups\WindowsUpdates\Disable-WindowsUpdates.ps1' -WhatIf
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
-param()
+param(
+    [ValidateRange(1, 4)]
+    [int]$Level = 4
+)
 
 . (Join-Path $PSScriptRoot '..\..\Core\CleanupEngine.ps1')
 
@@ -47,6 +54,7 @@ foreach ($entry in @($manifest.Services)) {
     try { $start = (Get-ItemProperty -Path $regPath -Name 'Start' -ErrorAction Stop).Start } catch { $start = $null }
 
     $target = $entry.Action
+    if (-not $target) { $target = $entry.Mode }
     if (-not $targetMap.ContainsKey($target)) { $target = 'Manual' }
 
     if ($null -ne $start -and [int]$start -eq [int]$targetMap[$target]) {
@@ -77,6 +85,6 @@ foreach ($entry in @($manifest.Services)) {
 }
 
 # --- Registry entries ------------------------------------------------------------
-foreach ($entry in @($manifest.RegistryEntries)) {
+foreach ($entry in @($manifest.RegistryEntries | Where-Object { -not $_.Level -or [int]$_.Level -le $Level })) {
     Set-WCSRegistryEntry -Entry $entry -BackupRoot $backupRoot
 }

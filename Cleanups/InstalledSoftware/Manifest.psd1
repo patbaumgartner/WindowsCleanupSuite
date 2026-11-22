@@ -15,7 +15,7 @@
         @{ Name = 'PowerToys (Preview) x64';     Publisher = 'Microsoft Corporation';           Reason = 'PowerToys utilities';           Kept = $true },
         @{ Name = 'TeamViewer';                  Publisher = 'TeamViewer';                      Reason = 'TeamViewer remote desktop';    Kept = $true },
         @{ Name = 'Dropbox';                     Publisher = 'Dropbox, Inc.';                   Reason = 'Dropbox cloud storage client'; Kept = $true },
-        @{ Name = 'Webex VDI Plugin Installer Engine'; Publisher = 'Cisco Systems, Inc';      Reason = 'Cisco Webex VDI plugin' }
+        @{ Name = 'Webex VDI Plugin Installer Engine'; Publisher = 'Cisco Systems, Inc';      Reason = 'Cisco Webex VDI plugin';      Kept = $true }
     )
 
     # UWP apps: removed via Get-AppxPackage -AllUsers + Remove-AppxProvisionedPackage -Online -AllUsers.

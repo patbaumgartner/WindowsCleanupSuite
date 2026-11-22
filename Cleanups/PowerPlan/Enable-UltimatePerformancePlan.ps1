@@ -22,9 +22,11 @@ param()
 
 . (Join-Path $PSScriptRoot '..\..\Core\CleanupEngine.ps1')
 
-$manifest = Get-SuiteManifest -CleanupName 'PowerPlan'
+$manifest   = Get-SuiteManifest -CleanupName 'PowerPlan'
+$backupRoot = Get-SuiteBackupRoot -CleanupName 'PowerPlan'
+$isAdmin    = Test-SuiteIsAdmin
 
-if (-not (Test-SuiteIsAdmin)) {
+if (-not $isAdmin) {
     Write-Warning 'PowerPlan: service/powercfg changes require Administrator; run elevated for full effect.'
 }
 
@@ -33,10 +35,7 @@ $plan = $manifest.PowerPlans[0]
 
 if (-not $PSCmdlet.ShouldProcess($plan.GUID, "Duplicate and activate power plan '$($plan.Name)' (Ultimate Performance)")) {
     Write-Host "  Would activate power plan: $($plan.Name) ($($plan.GUID))"
-    return
-}
-
-if (Test-Path $powercfg) {
+} elseif (Test-Path $powercfg) {
     & $powercfg -duplicatescheme $plan.GUID 2>$null | Out-Null
     & $powercfg -setactive $plan.GUID 2>$null | Out-Null
     Write-Host "  Activated power plan: $($plan.Name) ($($plan.GUID))"
@@ -44,40 +43,41 @@ if (Test-Path $powercfg) {
     Write-Warning "  powercfg.exe not found at $powercfg - skipping power plan activation"
 }
 
+# Registry tweaks are backed up (Set-WCSRegistryEntry) so Restore-PowerPlan.ps1 can revert them.
 foreach ($entry in @($manifest.RegistryEntries)) {
-    if (-not $PSCmdlet.ShouldProcess($entry.Path, "Set $($entry.Name) = $($entry.Value)")) {
-        Write-Host "  Would set: $($entry.Path)\$($entry.Name)"
+    if ($entry.Path -like 'HKLM:*' -and -not $isAdmin) {
+        Write-Host "  [reg]     Skipped (Admin): $($entry.Path)\$($entry.Name) - $($entry.Reason)"
         continue
     }
-    try {
-        if (-not (Test-Path $entry.Path)) { New-Item -Path $entry.Path -Force | Out-Null }
-        Set-ItemProperty -Path $entry.Path -Name $entry.Name -Value $entry.Value -Type DWord -ErrorAction Stop
-        Write-Host "  Set: $($entry.Path)\$($entry.Name) = $($entry.Value)"
-    } catch {
-        Write-Warning "  Failed: $($entry.Path)\$($entry.Name) - $($_.Exception.Message)"
-    }
+    if ($entry.Type) { Set-WCSRegistryEntry -Entry $entry -BackupRoot $backupRoot -Type $entry.Type }
+    else { Set-WCSRegistryEntry -Entry $entry -BackupRoot $backupRoot }
 }
 
 # Marvin700: set the SVCHost split threshold to match the installed RAM (LeDragoX Optimize-Performance).
 try {
     $ramKB = (Get-CimInstance -ClassName Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum).Sum / 1024
     if ($ramKB -gt 0) {
-        Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control' -Name 'SvcHostSplitThresholdInKB' -Type DWord -Value $ramKB -ErrorAction Stop
-        Write-Host "  Set: HKLM:\SYSTEM\CurrentControlSet\Control\SvcHostSplitThresholdInKB = $ramKB"
+        if ($isAdmin) {
+            Set-WCSRegistryEntry -Entry @{
+                Path = 'HKLM:\SYSTEM\CurrentControlSet\Control'; Name = 'SvcHostSplitThresholdInKB'
+                Value = [int]$ramKB; Type = 'DWord'; Reason = 'SvcHost split threshold = installed RAM (KB)'
+            } -BackupRoot $backupRoot -Type DWord
+        } else {
+            Write-Host '  [reg]     Skipped (Admin): HKLM:\SYSTEM\CurrentControlSet\Control\SvcHostSplitThresholdInKB'
+        }
     }
 } catch {
     Write-Warning "  Failed to set SvcHostSplitThresholdInKB: $($_.Exception.Message)"
 }
 
-# Marvin700: enable hibernation
-if (Test-Path $powercfg) {
-    & $powercfg /HIBERNATE ON 2>$null | Out-Null
-    Write-Host '  Enabled hibernation (full)'
-}
-
 # Debloat: disable hibernate entirely (faster boot, less disk churn; fast startup
 # is separately disabled by the WindowsUpdates cleanup via HiberbootEnabled=0).
 if (Test-Path $powercfg) {
-    $hiberOff = & $powercfg /HIBERNATE OFF 2>$null
-    Write-Host "  Disabled hibernate: $hiberOff"
+    if ($PSCmdlet.ShouldProcess('powercfg', 'HIBERNATE ON then OFF (disable hibernation for faster boot)')) {
+        & $powercfg /HIBERNATE ON 2>$null | Out-Null
+        $hiberOff = & $powercfg /HIBERNATE OFF 2>$null
+        Write-Host "  Disabled hibernate: $hiberOff"
+    } else {
+        Write-Host '  Would disable hibernate (powercfg /HIBERNATE OFF)'
+    }
 }

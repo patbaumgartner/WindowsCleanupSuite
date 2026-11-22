@@ -60,10 +60,10 @@ Release zip, extracts it to `%TEMP%\WindowsCleanupSuite` and launches the menu. 
 
 ```powershell
 # PowerShell (recommended):
-irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/master/Launcher.ps1
+irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1
 
 # curl (Windows):
-curl.exe https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/master/Launcher.ps1 -o "%TEMP%\Launcher.ps1"
+curl.exe https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 -o "%TEMP%\Launcher.ps1"
 powershell -File "%TEMP%\Launcher.ps1"
 ```
 

@@ -26,7 +26,7 @@ foreach ($keyPath in $uninstallKeys) {
     if (-not (Test-Path $keyPath)) { continue }
     foreach ($subKey in (Get-ChildItem $keyPath -ErrorAction SilentlyContinue)) {
         try { $ip = Get-ItemProperty -Path $subKey.PSPath -ErrorAction Stop } catch { continue }
-        if (-not $ip.PSObject.Properties.Name -contains 'DisplayName') { continue }
+        if (-not ($ip.PSObject.Properties.Name -contains 'DisplayName')) { continue }
         $installed += [pscustomobject]@{
             Name = [string]$ip.DisplayName
             Publisher = if ($ip.PSObject.Properties.Name -contains 'Publisher') { [string]$ip.Publisher } else { '' }

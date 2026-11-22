@@ -199,22 +199,30 @@ function Invoke-WCSTopicCleanups {
             $path = Join-Path $root $script
             if (-not (Test-Path $path)) { Write-Warning "  Missing script: $script"; continue }
 
-            if ($script -eq 'Runners\Run-Cleanup.ps1') {
-                # Run-Cleanup has its own preview default (no -Apply = preview).
-                if ($Apply) { & $path -Profile $level.Profile -Apply } else { & $path -Profile $level.Profile }
-            } elseif ($script -eq 'Cleanups\PrivacySettings\Disable-PrivacySettings.ps1' -or $script -eq 'Cleanups\ExtremeExtras\Disable-ExtremeExtras.ps1') {
-                if ($Apply) { & $path -Level $level.Level } else { & $path -WhatIf -Level $level.Level }
-            } elseif ($script -eq 'Cleanups\WindowsUpdates\Disable-WindowsUpdates.ps1') {
-                if ($Apply) { & $path } else { & $path -WhatIf }
-            } elseif ($script -in @('Cleanups\Privacy\Disable-Privacy.ps1', 'Cleanups\Browsers\Disable-Browsers.ps1', 'Cleanups\Network\Disable-Network.ps1')) {
-                # Privacy/Browsers/Network: apply inherently; menu -AllowRisky opts in to Risky items.
-                if ($Apply) { & $path -AllowRisky:$AllowRisky } else { & $path -WhatIf -AllowRisky:$AllowRisky }
-            } else {
-                # Other cleanups: -Apply applies; preview passes -WhatIf (all have SupportsShouldProcess).
-                if ($Apply) { & $path -Apply } else { & $path -WhatIf }
+            $LASTEXITCODE = $null
+            $failed = $false
+            try {
+                if ($script -eq 'Runners\Run-Cleanup.ps1') {
+                    # Run-Cleanup has its own preview default (no -Apply = preview).
+                    if ($Apply) { & $path -Profile $level.Profile -Apply -AllowRisky:$AllowRisky } else { & $path -Profile $level.Profile -AllowRisky:$AllowRisky }
+                } elseif ($script -eq 'Cleanups\PrivacySettings\Disable-PrivacySettings.ps1' -or $script -eq 'Cleanups\ExtremeExtras\Disable-ExtremeExtras.ps1') {
+                    if ($Apply) { & $path -Level $level.Level } else { & $path -WhatIf -Level $level.Level }
+                } elseif ($script -eq 'Cleanups\WindowsUpdates\Disable-WindowsUpdates.ps1') {
+                    if ($Apply) { & $path -Level $level.Level } else { & $path -WhatIf -Level $level.Level }
+                } elseif ($script -in @('Cleanups\Privacy\Disable-Privacy.ps1', 'Cleanups\Browsers\Disable-Browsers.ps1', 'Cleanups\Network\Disable-Network.ps1')) {
+                    # Privacy/Browsers/Network: apply inherently; menu -AllowRisky opts in to Risky items.
+                    if ($Apply) { & $path -AllowRisky:$AllowRisky } else { & $path -WhatIf -AllowRisky:$AllowRisky }
+                } else {
+                    # Other cleanups have SupportsShouldProcess only (no -Apply param):
+                    # apply = run without -WhatIf; preview = pass -WhatIf.
+                    if ($Apply) { & $path } else { & $path -WhatIf }
+                }
+            } catch {
+                $failed = $true
+                Write-Warning "  Script failed: $script - $($_.Exception.Message)"
             }
 
-            if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { $global:WCS_MenuFailed = $true }
+            if ($failed -or ($LASTEXITCODE -and $LASTEXITCODE -ne 0)) { $global:WCS_MenuFailed = $true }
         }
     }
 }
@@ -329,7 +337,8 @@ function Invoke-WCSActionMenu {
                 Register-WCSReRunTask -Days 7
             }
             '5' {
-                Invoke-WCSTool -Tool 'Tools\Restore-WCSBackup.ps1'
+                $toolPath = Join-Path (Get-SuiteRoot) 'Tools\Restore-WCSBackup.ps1'
+                if (Test-Path $toolPath) { & $toolPath -Backups } else { Write-Warning "  Missing: Tools\Restore-WCSBackup.ps1" }
             }
             '6' {
                 foreach ($script in @('Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1')) {
@@ -442,7 +451,7 @@ else {
         Invoke-WCSActionMenu -LevelKey $levelKey -Topics $topicNames -AllowRisky:$AllowRisky
     }
 
-    if ($SavePreferences -or $prefs) { Save-WCSPreferences -LevelKey $levelKey -TopicNames $topicNames }
+    if ($SavePreferences) { Save-WCSPreferences -LevelKey $levelKey -TopicNames $topicNames }
 }
 
 if ($global:WCS_MenuFailed) { exit 1 }

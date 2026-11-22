@@ -185,10 +185,10 @@ function ConvertFrom-WCSLevelInput {
         'balanced' { $canonical = 'Balanced' }
         'aggressive' { $canonical = 'Aggressive' }
         'extreme' { $canonical = 'Extreme' }
-        default { throw "Invalid level '$Input'. Valid: 1, 2, 3, 4, Safe, Balanced, Aggressive, Extreme" }
+        default { throw "Invalid level '$trimmed'. Valid: 1, 2, 3, 4, Safe, Balanced, Aggressive, Extreme" }
     }
     if ($canonical -notin @((Get-WCSLevelDefinitions).Key)) {
-        throw "Invalid level '$Input'. Valid: 1, 2, 3, 4, Safe, Balanced, Aggressive, Extreme"
+        throw "Invalid level '$trimmed'. Valid: 1, 2, 3, 4, Safe, Balanced, Aggressive, Extreme"
     }
     return $canonical
 }

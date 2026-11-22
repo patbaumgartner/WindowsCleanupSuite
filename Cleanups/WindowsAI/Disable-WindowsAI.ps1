@@ -35,10 +35,16 @@ foreach ($entry in @($manifest.Entries)) {
         continue
     }
 
-    $previousValue = $null
-    try { $previousValue = (Get-ItemProperty -Path $entry.RegistryKey -ErrorAction Stop).PSObject.Properties | Where-Object { $_.Name -eq $entry.Name } | Select-Object -ExpandProperty Value } catch { $previousValue = $null }
+    $previousValue = $null; $hadPrevious = $false; $previousType = ''
+    try {
+        $prop = Get-ItemProperty -Path $entry.RegistryKey -Name $entry.Name -ErrorAction Stop
+        $previousValue = $prop.$($entry.Name)
+        if ($null -ne $previousValue) { $hadPrevious = $true; $previousType = Get-WCSRegistryType $previousValue }
+    } catch { $hadPrevious = $false }
 
-    $record = @{ Type = 'Registry'; RegistryKey = $entry.RegistryKey; Name = $entry.Name; PreviousValue = $previousValue; NewValue = $entry.Value; Reason = $entry.Reason }
+    # Same schema as Invoke-SuiteRegistryEntry so Restore-SuiteRegistryRecords /
+    # Tools\Restore-WCSBackup.ps1 can consume these records too.
+    $record = @{ Type = 'Registry'; RegistryKey = $entry.RegistryKey; Name = $entry.Name; HadPrevious = [bool]$hadPrevious; PreviousValue = $previousValue; ValueType = $previousType; NewValue = $entry.Value; Reason = $entry.Reason }
     New-SuiteBackupFile -BackupRoot $backupRoot -FileName "$(Get-SuiteSafeFileName $entry.RegistryKey)-$(Get-SuiteSafeFileName $entry.Name).json" -Record $record
 
     try {

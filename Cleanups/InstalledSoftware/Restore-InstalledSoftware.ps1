@@ -27,11 +27,23 @@ $backupRoot = Get-SuiteBackupRoot -CleanupName 'InstalledSoftware'
 Write-Host 'Restoring removed Win32 apps'
 foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Object { $_.Type -eq 'Win32' })) {
     if (-not $record.RegKeyPath -or -not $record.Values) { Write-Warning "Malformed backup record: $($record.Name)"; continue }
-    if (-not (Test-Path $record.RegKeyPath)) { Write-Warning "  Restore: path not found: $($record.RegKeyPath)"; continue }
     if (-not $PSCmdlet.ShouldProcess($record.Name, 'Restore Win32 app registry entry')) { Write-Host "  Would restore Win32 app: $($record.Name)"; continue }
     try {
+        # The uninstaller usually deletes its Uninstall key - recreate it so the
+        # backed-up values can be restored.
+        if (-not (Test-Path $record.RegKeyPath)) {
+            New-Item -Path $record.RegKeyPath -Force -ErrorAction Stop | Out-Null
+            Write-Host "  Recreated registry key: $($record.RegKeyPath)"
+        }
         foreach ($value in $record.Values) {
-            Set-ItemProperty -Path $record.RegKeyPath -Name $value.Name -Value $value.Value -ErrorAction Stop
+            $val = $value.Value
+            $type = if ($value.PSObject.Properties.Name -contains 'Type') { [string]$value.Type } else { '' }
+            if ($type -eq 'Binary' -and $val -is [string]) { $val = [byte[]][Convert]::FromBase64String($val) }
+            if ($type -and $type -in @('DWord', 'QWord', 'String', 'ExpandString', 'MultiString', 'Binary')) {
+                Set-ItemProperty -Path $record.RegKeyPath -Name $value.Name -Value $val -Type $type -ErrorAction Stop
+            } else {
+                Set-ItemProperty -Path $record.RegKeyPath -Name $value.Name -Value $val -ErrorAction Stop
+            }
         }
         Write-Host "  Restored Win32 app: $($record.Name)"
     } catch {
@@ -39,6 +51,10 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Obj
     }
 }
 
-Write-Host ''
-Write-Host 'Note: UWP apps (Microsoft.*, Samsung, Dell, Social, Streaming) were removed via Remove-AppxPackage.'
-Write-Host 'To get them back, reinstall from the Microsoft Store (and re-run Windows Update for updates).'
+$uwpRemoved = @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Object { $_.Type -eq 'UwpRemoved' })
+if ($uwpRemoved.Count) {
+    Write-Host ''
+    Write-Host "Note: $($uwpRemoved.Count) UWP app(s) were removed via Remove-AppxPackage and cannot be auto-reinstalled:"
+    foreach ($u in $uwpRemoved) { Write-Host "  - $($u.Name) [$($u.Scope)]" }
+    Write-Host 'To get them back, reinstall from the Microsoft Store (and re-run Windows Update for updates).'
+}

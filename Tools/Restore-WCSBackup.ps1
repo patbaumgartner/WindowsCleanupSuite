@@ -36,12 +36,14 @@ param(
     [Parameter(ParameterSetName = 'Backups')][switch]$Backups,
 
     [Parameter(ParameterSetName = 'RestorePoint')][int]$RestorePoint,
-    [Parameter(ParameterSetName = 'RestorePoint')][switch]$Latest,
-
-    [switch]$WhatIf
+    [Parameter(ParameterSetName = 'RestorePoint')][switch]$Latest
+    # -WhatIf comes from SupportsShouldProcess (declaring it again would conflict).
 )
 
-. (Join-Path $PWD 'Core\CleanupEngine.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Core\CleanupEngine.ps1')
+
+# Default parameter set is 'Backups': a bare invocation (no switch) restores backups.
+if ($PSCmdlet.ParameterSetName -eq 'Backups' -and -not $PSBoundParameters.ContainsKey('Backups')) { $Backups = $true }
 
 $SuiteRoot = Get-SuiteRoot
 $global:WCS_RestoreFailed = $false
@@ -52,13 +54,25 @@ function Restore-WCSCustomRegistryRecords {
     $root = Join-Path $SuiteRoot 'Backups'
     if (-not (Test-Path $root)) { return }
 
-    foreach ($file in @(Get-ChildItem -Path $root -Recurse -File -Include '*.json' -ErrorAction SilentlyContinue)) {
+    # Backup records are written in two shapes (both JSON, .json or .txt):
+    #   - Invoke-SuiteRegistryEntry / Disable-WindowsAI: RegistryKey + HadPrevious + PreviousValue (+ ValueType)
+    #   - Set-WCSRegistryEntry:                           Path       + OldExists   + OldValue   (+ OldType)
+    # Normalize both so every Type='Registry' record is restorable here.
+    foreach ($file in @(Get-ChildItem -Path $root -Recurse -File -Include '*.json', '*.txt' -ErrorAction SilentlyContinue)) {
         $content = $null
         try { $content = Get-Content -Raw -Path $file.FullName -ErrorAction Stop } catch { $content = $null }
         if ([string]::IsNullOrWhiteSpace($content)) { continue }
         try { $records = @((ConvertFrom-Json $content)) } catch { continue }
 
-        foreach ($record in @($records | Where-Object { $_.Type -eq 'Registry' -and $_.Path -and $_.Name })) {
+        foreach ($raw in @($records | Where-Object { $_.Type -eq 'Registry' -and $_.Name -and ($_.Path -or $_.RegistryKey) })) {
+            $record = [ordered]@{
+                Path       = if ($raw.Path) { $raw.Path } else { $raw.RegistryKey }
+                Name       = $raw.Name
+                OldExists  = if ($raw.PSObject.Properties.Name -contains 'OldExists') { [bool]$raw.OldExists } else { [bool]$raw.HadPrevious }
+                OldValue   = if ($raw.PSObject.Properties.Name -contains 'OldValue') { $raw.OldValue } else { $raw.PreviousValue }
+                OldType    = if ($raw.PSObject.Properties.Name -contains 'OldType' -and $raw.OldType) { $raw.OldType } elseif ($raw.ValueType) { $raw.ValueType } else { '' }
+            }
+
             $names = @()
             if (Test-Path $record.Path) { $names = @((Get-Item -Path $record.Path -ErrorAction SilentlyContinue).Property) }
             $targetExists = ($names -contains $record.Name)
@@ -70,7 +84,11 @@ function Restore-WCSCustomRegistryRecords {
 
             try {
                 if ($record.OldExists) {
-                    Restore-WCSRegistryRecordValue -Record $record -ErrorAction Stop
+                    if (-not (Test-Path $record.Path)) { New-Item -Path $record.Path -Force | Out-Null }
+                    $value = $record.OldValue
+                    if ($record.OldType -eq 'Binary' -and $value -is [string]) { $value = [byte[]][Convert]::FromBase64String($value) }
+                    if ($record.OldType) { Set-ItemProperty -Path $record.Path -Name $record.Name -Value $value -Type $record.OldType -ErrorAction Stop }
+                    else { Set-ItemProperty -Path $record.Path -Name $record.Name -Value $value -ErrorAction Stop }
                     Write-Host "  [reg]     Restored: $($record.Path)\$($record.Name) = $($record.OldValue)"
                 } elseif ($targetExists) {
                     Remove-ItemProperty -Path $record.Path -Name $record.Name -ErrorAction Stop
@@ -92,9 +110,14 @@ function Invoke-WCSToolRestore {
     if (-not (Test-Path $path)) { Write-Warning "  Missing: $Tool - skipping"; return }
 
     Write-Host "--- $Tool ---"
-    & $path -ErrorAction SilentlyContinue | Out-Null
-    $exit = $LASTEXITCODE
-    if ($exit -and $exit -ne 0) { $global:WCS_RestoreFailed = $true }
+    $LASTEXITCODE = $null
+    try {
+        & $path -WhatIf:$WhatIfPreference -ErrorAction Stop
+    } catch {
+        $global:WCS_RestoreFailed = $true
+        Write-Warning "  Restore script failed: $Tool - $($_.Exception.Message)"
+    }
+    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { $global:WCS_RestoreFailed = $true }
 }
 
 # --- Backups mode -------------------------------------------------------------------
@@ -123,6 +146,10 @@ if ($Backups) {
     }
 
     Write-Host ''
+    if ($global:WCS_RestoreFailed) {
+        Write-Warning 'Restore finished WITH errors - see warnings above.'
+        exit 1
+    }
     Write-Host 'Restore complete.' -ForegroundColor Green
     exit 0
 }

@@ -125,6 +125,22 @@ function Get-SuiteBackupRecords {
     return $records
 }
 
+# Full service/task enumerations are slow; cache them once per session so
+# manifests with many NamePattern entries do not re-enumerate per entry.
+function Get-SuiteCachedServices {
+    if ($null -eq $global:WCS_ServiceCache) {
+        $global:WCS_ServiceCache = @(Get-Service -ErrorAction SilentlyContinue | Sort-Object Name)
+    }
+    return $global:WCS_ServiceCache
+}
+
+function Get-SuiteCachedTasks {
+    if ($null -eq $global:WCS_TaskCache) {
+        $global:WCS_TaskCache = @(Get-ScheduledTask -ErrorAction SilentlyContinue | Sort-Object TaskPath, TaskName)
+    }
+    return $global:WCS_TaskCache
+}
+
 function Get-RegistryEntryValues {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -276,10 +292,9 @@ function Invoke-SuiteServiceEntry {
 
     $matches = @()
     if ($Entry.NamePattern) {
-        $matches = @(Get-Service -Name $Entry.NamePattern -ErrorAction SilentlyContinue | Sort-Object Name)
+        $matches = @(Get-SuiteCachedServices | Where-Object { $_.Name -like $Entry.NamePattern })
     } else {
-        $obj = Get-Service -Name $Entry.Name -ErrorAction SilentlyContinue
-        if ($obj) { $matches = @($obj) }
+        $matches = @(Get-SuiteCachedServices | Where-Object { $_.Name -eq $Entry.Name })
     }
     if (-not $matches.Count) {
         Write-Host "  [service] No matches: $(Get-SuiteEntryLabel -Entry $Entry) - $($Entry.Reason)"

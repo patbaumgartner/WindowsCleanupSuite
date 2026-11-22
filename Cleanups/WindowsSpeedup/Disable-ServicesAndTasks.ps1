@@ -71,10 +71,9 @@ function Disable-SuiteService {
 
     $matches = @()
     if ($Entry.NamePattern) {
-        $matches = @(Get-Service -Name $Entry.NamePattern -ErrorAction SilentlyContinue | Sort-Object Name)
+        $matches = @(Get-SuiteCachedServices | Where-Object { $_.Name -like $Entry.NamePattern })
     } else {
-        $obj = Get-Service -Name $Entry.Name -ErrorAction SilentlyContinue
-        if ($obj) { $matches = @($obj) }
+        $matches = @(Get-SuiteCachedServices | Where-Object { $_.Name -eq $Entry.Name })
     }
 
     if (-not $matches.Count) {
@@ -145,11 +144,10 @@ function Disable-SuiteScheduledTask {
         } elseif ($Entry.Path) {
             $path = $Entry.Path
         }
-        $allTasks = if ($path) { @(Get-ScheduledTask -TaskPath $path -ErrorAction SilentlyContinue) } else { @(Get-ScheduledTask -ErrorAction SilentlyContinue) }
-        $matches = @($allTasks | Where-Object { $_.TaskName -like $Entry.NamePattern } | Sort-Object TaskPath, TaskName)
+        $allTasks = @(Get-SuiteCachedTasks)
+        $matches = @($allTasks | Where-Object { $_.TaskName -like $Entry.NamePattern -and (-not $path -or $_.TaskPath -eq $path) })
     } else {
-        $obj = Get-ScheduledTask -TaskPath $Entry.Path -TaskName $Entry.Name -ErrorAction SilentlyContinue
-        if ($obj) { $matches = @($obj) }
+        $matches = @(Get-SuiteCachedTasks | Where-Object { $_.TaskName -eq $Entry.Name -and $_.TaskPath -eq $Entry.Path })
     }
 
     if (-not $matches.Count) {
@@ -193,7 +191,7 @@ foreach ($entry in @($manifest.Tasks)) {
 
 # OneDrive background/update/startup tasks (names vary by SID).
 if (-not $LoginSafe) {
-    $oneDriveTasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue |
+    $oneDriveTasks = @(Get-SuiteCachedTasks |
         Where-Object {
             $_.TaskName -eq 'OneDrive Per-Machine Standalone Update Task' -or
             $_.TaskName -like 'OneDrive Reporting Task-*' -or

@@ -22,10 +22,9 @@ $manifest = Get-SuiteManifest -CleanupName 'WindowsSpeedup'
 function Get-SuiteAuditServiceMatches {
     param([psobject]$Entry)
     if ($Entry.NamePattern) {
-        $matches = @(Get-Service -Name $Entry.NamePattern -ErrorAction SilentlyContinue)
+        $matches = @(Get-SuiteCachedServices | Where-Object { $_.Name -like $Entry.NamePattern })
     } else {
-        $obj = Get-Service -Name $Entry.Name -ErrorAction SilentlyContinue
-        $matches = if ($obj) { @($obj) } else { @() }
+        $matches = @(Get-SuiteCachedServices | Where-Object { $_.Name -eq $Entry.Name })
     }
     return $matches
 }
@@ -37,11 +36,10 @@ function Get-SuiteAuditTaskMatches {
         $path = $null
         if ($Entry.PathPattern) { $path = $Entry.PathPattern }
         elseif ($Entry.Path) { $path = $Entry.Path }
-        $allTasks = if ($path) { @(Get-ScheduledTask -TaskPath $path -ErrorAction SilentlyContinue) } else { @(Get-ScheduledTask -ErrorAction SilentlyContinue) }
-        $matches = @($allTasks | Where-Object { $_.TaskName -like $Entry.NamePattern })
+        $allTasks = @(Get-SuiteCachedTasks)
+        $matches = @($allTasks | Where-Object { $_.TaskName -like $Entry.NamePattern -and (-not $path -or $_.TaskPath -eq $path) })
     } else {
-        $obj = Get-ScheduledTask -TaskPath $Entry.Path -TaskName $Entry.Name -ErrorAction SilentlyContinue
-        if ($obj) { $matches = @($obj) }
+        $matches = @(Get-SuiteCachedTasks | Where-Object { $_.TaskName -eq $Entry.Name -and $_.TaskPath -eq $Entry.Path })
     }
     return $matches
 }

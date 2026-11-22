@@ -50,7 +50,13 @@ foreach ($entry in @($manifest.Win32Apps)) {
                 continue
             }
             if ($ip.PSObject.Properties.Name -contains 'UninstallString' -and $ip.UninstallString) {
-                $values = @($ip.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object { @{ Name = $_.Name; Value = $_.Value } })
+                $values = @($ip.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object {
+                    @{
+                        Name = $_.Name
+                        Value = if ($_.Value -is [byte[]]) { [Convert]::ToBase64String($_.Value) } else { $_.Value }
+                        Type = Get-WCSRegistryType $_.Value
+                    }
+                })
                 $record = @{
                     Type = 'Win32'; Name = $displayName
                     Publisher = if ($ip.PSObject.Properties.Name -contains 'Publisher') { [string]$ip.Publisher } else { '' }
@@ -59,8 +65,13 @@ foreach ($entry in @($manifest.Win32Apps)) {
                     Values = $values
                 }
                 New-SuiteBackupFile -BackupRoot $backupRoot -FileName "win32_$(Get-SuiteSafeFileName $displayName).json" -Record $record
-                Start-Process -FilePath cmd.exe -ArgumentList '/c', $ip.UninstallString -Wait -ErrorAction SilentlyContinue
-                Write-Host "  Removed Win32 app: $displayName"
+                $proc = Start-Process -FilePath cmd.exe -ArgumentList '/c', $ip.UninstallString -Wait -PassThru -ErrorAction SilentlyContinue
+                $exitCode = if ($proc) { $proc.ExitCode } else { $null }
+                if ($null -eq $exitCode -or $exitCode -eq 0) {
+                    Write-Host "  Removed Win32 app: $displayName"
+                } else {
+                    Write-Warning "  Uninstaller for '$displayName' exited with code $exitCode (failed or cancelled) - backup kept in $backupRoot"
+                }
                 $found = $true
             } else {
                 Write-Warning "  No uninstaller string for '$displayName' - skipping"
@@ -96,10 +107,14 @@ foreach ($entry in @($manifest.UwpApps)) {
             Write-Host "  Skipped (Protected): $($app.Name)"
             continue
         }
+        New-SuiteBackupFile -BackupRoot $backupRoot -FileName "uwp_removed_$(Get-SuiteSafeFileName $app.Name).json" -Record @{
+            Type = 'UwpRemoved'; Name = $app.Name; PackageFullName = $app.PackageFullName; Scope = $scope
+        }
         if ($canAllUsers) {
             Remove-AppxPackage -AllUsers -Package $app.PackageFullName -ErrorAction SilentlyContinue | Out-Null
         } else {
             Remove-AppxPackage -Package $app.PackageFullName -ErrorAction SilentlyContinue | Out-Null
+            Write-Host "  Note: current-user UWP removal is recorded but not auto-restorable - reinstall from the Microsoft Store if needed."
         }
         Write-Host "  Removed UWP app ($scope): $($app.Name)"
     }

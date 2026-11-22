@@ -5,7 +5,7 @@ All notable changes to WindowsCleanupSuite will be documented in this file.
 ## [1.0.0] - 2026-11-21 - self-executing launcher
 
 - **Launcher.ps1** — self-executing, curl-friendly download-and-run (the Raphire/Win11Debloat
-  style): `irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/master/Launcher.ps1`
+  style): `irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1`
   fetches the latest GitHub Release zip, extracts it to `%TEMP%\WindowsCleanupSuite` and launches the menu.
   (GitHub API unavailable from this sandbox - verified: curl.exe to api.github.com fails.)
 
@@ -15,6 +15,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 = first publishable release).
 
 ## [Unreleased]
+
+### Fixed
+
+- **Launcher.ps1**: GitHub API URL was built from the full repo URL (`api.github.com/repos/https://github.com/...` → 404) and there was no fallback when no release exists — the one-liner failed with "Could not resolve the latest release zip". Now uses `api.github.com/repos/patbaumgartner/WindowsCleanupSuite` and falls back to the `main` branch source archive (codeload) until the first `vX.Y.Z` release exists; added `-Branch`, forced TLS 1.2 for PS 5.1.
+- **CI/docs branch drift**: `ci.yml` only triggered on `master` (default branch is `main`), README/CHANGELOG one-liners used `/master/` — all switched to `main`.
+- **Menu apply mode**: `Core\WCS.Menu.ps1` passed `-Apply` to cleanup scripts that only support `-WhatIf` (ParameterBindingException); now apply = run without `-WhatIf`. Menu also forwards `-AllowRisky` to `Run-Cleanup.ps1`, passes `-Level` to `Disable-WindowsUpdates.ps1`, detects script failures via try/catch (not only `$LASTEXITCODE`), action 5 now calls `Restore-WCSBackup.ps1 -Backups`, and preferences are only rewritten when `-SavePreferences` is given. `Runners\Run-Menu.ps1` now accepts `-AllowRisky`/`-AutoApprove`.
+- **Tools\Restore-WCSBackup.ps1**: dot-sourced the engine via `$PWD` (crashed unless CWD = suite root) → now `$PSScriptRoot`-based; bare invocation now defaults to `-Backups`; `-WhatIf` is forwarded to every `Restore-*.ps1` (previously ignored → would really restore); errors are no longer swallowed (`-ErrorAction SilentlyContinue | Out-Null`); generic registry restore now reads both backup schemas (`RegistryKey/HadPrevious` and `Path/OldExists`, `.json` and `.txt`); exit code 1 when any restore failed.
+- **Backup schema alignment**: `Disable-WindowsAI.ps1` now writes `HadPrevious`/`ValueType` (engine schema) so `Restore-SuiteRegistryRecords` and the Tools restore can consume its records; `Restore-WindowsAI.ps1` creates missing keys and restores by recorded type (engine-consistent). `Enable-UltimatePerformancePlan.ps1` now backs up every registry tweak via `Set-WCSRegistryEntry` (incl. `SvcHostSplitThresholdInKB`), respects the manifest `Type` (String vs DWord), no longer aborts the whole script in `-WhatIf`, and hibernate on/off is ShouldProcess-gated. `Restore-PowerPlan.ps1` is a real restore now (restores backed-up values, re-activates Balanced plan, admin-gated) instead of setting everything to 0.
+- **Disable-WindowsUpdates.ps1**: added `-Level` (1-4, default 4) so Safe/Balanced no longer apply Level-2 items (e.g. `HiberbootEnabled=0`); accepts both `Action` and `Mode` service keys.
+- **InstalledSoftware**: `Webex VDI Plugin Installer Engine` is now `Kept = $true` like the other keep-list apps; Win32 backup records keep value types (Binary as base64) and the restore recreates a deleted Uninstall key; uninstaller exit code is checked (no more unconditional "Removed"); UWP removals (both scopes) are recorded.
+- **Audit\Check-SystemHealth.ps1**: DISM RestoreHealth / sfc repairs are now ShouldProcess-gated with an admin warning (was: unconditional system modification in a read-only Audit folder).
+- **Audit\Audit-InstalledSoftware.ps1**: fixed operator-precedence bug (`-not $x -contains 'y'` never skipped entries without DisplayName).
+- **Core\WCS.Catalog.ps1**: `ConvertFrom-WCSLevelInput` error messages referenced `$Input` (empty) instead of the actual input.
+- **Performance**: full `Get-Service`/`Get-ScheduledTask` enumerations are now cached per session (`Get-SuiteCachedServices`/`Get-SuiteCachedTasks`) — the Balanced preview ran ~6.5 min slower than needed because every manifest entry re-enumerated all services/tasks.
 
 ### Added
 

@@ -14,8 +14,10 @@ param(
     [string[]]$Topics,
     [string]$Level,
     [switch]$Apply,
+    [switch]$AutoApprove,
     [switch]$NonInteractive,
-    [switch]$SavePreferences
+    [switch]$SavePreferences,
+    [switch]$AllowRisky
 )
 
 $MenuPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'Core\WCS.Menu.ps1'
