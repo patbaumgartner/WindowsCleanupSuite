@@ -45,14 +45,12 @@ jobs:
         run: |
           $shortSha = "${{ github.sha }}".Substring(0, 8)
           $zip = "WindowsCleanupSuite-snapshot-$shortSha.zip"
-          $repoRoot = (Get-Location).Path
-          # Relative paths keep the directory structure inside the zip (absolute
-          # paths flatten all files to the archive root and same-named files collide).
-          $files = @(Get-ChildItem -Path . -File -Recurse -Exclude '.git', 'Logs', 'Backups' -ErrorAction SilentlyContinue |
-            ForEach-Object { $_.FullName.Substring($repoRoot.Length + 1) })
-          if ($files.Count -eq 0) { $files = @(Get-ChildItem -Path . -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName.Substring($repoRoot.Length + 1) }) }
-          Compress-Archive -Path $files -DestinationPath $zip -Force
-          Write-Host "Created $zip ($((Get-Item $zip).Length) bytes)"
+          # Compress-Archive flattens all entries to file names (even with
+          # relative paths), so same-named files like the 14 Manifest.psd1
+          # collide. New-WCSZip keeps the directory structure via .NET ZipFile.
+          . .\Tools\New-WCSZip.ps1
+          $count = New-WCSZip -DestinationPath $zip -ExcludeDirNames '.git', 'Logs', 'Backups'
+          Write-Host "Created $zip with $count files ($((Get-Item $zip).Length) bytes)"
           Get-FileHash -Path $zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $([System.IO.Path]::GetFileName($zip))" } | Set-Content "$zip.SHA256" -Encoding ASCII
           Get-ChildItem $zip, "$zip.SHA256"
 

@@ -43,20 +43,14 @@ jobs:
         run: |
           $tag = "${{ steps.tag.outputs.tag }}"
           $zip = "WindowsCleanupSuite-$tag.zip"
-          $repoRoot = (Get-Location).Path
-          $files = @()
-          foreach ($item in (Get-ChildItem -Path . -File -Recurse -ErrorAction SilentlyContinue)) {
-            $full = $item.FullName
-            if ($full -match '(^|\\)(\.git|Logs|Backups)(\\|$)') { continue }
-            # Relative paths keep the directory structure inside the zip;
-            # absolute paths would flatten every file to the archive root
-            # (same-named files like the 14 Manifest.psd1 would collide).
-            $files += $full.Substring($repoRoot.Length + 1)
-          }
-          Compress-Archive -Path @($files) -DestinationPath $zip -Force
+          # Compress-Archive flattens all entries to file names (even with
+          # relative paths), so same-named files like the 14 Manifest.psd1
+          # collide. New-WCSZip keeps the directory structure via .NET ZipFile.
+          . .\Tools\New-WCSZip.ps1
+          $count = New-WCSZip -DestinationPath $zip -ExcludeDirNames '.git', 'Logs', 'Backups'
           $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash
           "$hash  $zip" | Set-Content "$zip.SHA256" -Encoding ASCII
-          Write-Host "Built $zip and $zip.SHA256"
+          Write-Host "Built $zip ($count files) and $zip.SHA256"
           "zip=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8 -Append
 
       - name: Create GitHub Release

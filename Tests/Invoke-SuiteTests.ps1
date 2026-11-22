@@ -238,7 +238,7 @@ foreach ($rel in @(
     'Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1', 'Audit\Audit-RunningServices.ps1', 'Audit\Check-SystemHealth.ps1', 'Audit\Perf-Snapshot.ps1',
     'Tests\Invoke-SuiteTests.ps1',
     'Core\CleanupEngine.ps1', 'Core\WCS.Catalog.ps1', 'Core\WCS.Menu.ps1', 'Core\WCS.Updates.ps1', 'Core\WCS.Scheduler.ps1',
-    'Tools\Restore-WCSBackup.ps1', 'Launcher.ps1',
+    'Tools\Restore-WCSBackup.ps1', 'Tools\New-WCSZip.ps1', 'Launcher.ps1',
     'LICENSE', 'CHANGELOG.md', 'VERSION', 'README.md'
 )) {
     Test-SuiteCheck -Name "File exists: $rel" -Pass (Test-Path (Join-Path $SuiteRoot $rel))
@@ -277,6 +277,27 @@ Test-SuiteCheck -Name 'No code references legacy runners (Run-Cleanup/Run-Monthl
 
 $wsDisableText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1')
 Test-SuiteCheck -Name 'WindowsSpeedup Disable has -AllowRisky + risky gates (services/tasks/processes)' -Pass ($wsDisableText -match '\[switch\]\$AllowRisky' -and (@([regex]::Matches($wsDisableText, 'Test-SuiteEntryRiskyAllowed')).Count -ge 3))
+
+# --- 4c. Release/snapshot zip layout: New-WCSZip must preserve the structure -------
+# (Compress-Archive flattens all entries to file names - even with relative paths -
+#  so the 14 Manifest.psd1 would collide and the extracted suite would be unusable.)
+. (Join-Path $SuiteRoot 'Tools\New-WCSZip.ps1')
+$zipTest = Join-Path ([System.IO.Path]::GetTempPath()) "wcs-zip-test-$PID.zip"
+try {
+    $null = New-WCSZip -DestinationPath $zipTest -ExcludeDirNames '.git', 'Logs', 'Backups'
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $z = [System.IO.Compression.ZipFile]::OpenRead($zipTest)
+    $zipEntries = @($z.Entries | ForEach-Object { $_.FullName })
+    $z.Dispose()
+    Test-SuiteCheck -Name 'Zip: archive contains the suite files' -Pass ($zipEntries.Count -gt 50) -Detail "$($zipEntries.Count) entries"
+    Test-SuiteCheck -Name 'Zip: entries keep directory structure (nested entries)' -Pass (@($zipEntries | Where-Object { $_ -match '/' }).Count -gt 50)
+    Test-SuiteCheck -Name 'Zip: Runners/Run-Menu.ps1 archived under its folder' -Pass ($zipEntries -contains 'Runners/Run-Menu.ps1')
+    Test-SuiteCheck -Name 'Zip: all 14 Manifest.psd1 present (no name collisions)' -Pass (@($zipEntries | Where-Object { $_ -like '*/Manifest.psd1' }).Count -eq 14)
+    Test-SuiteCheck -Name 'Zip: no legacy runners in archive' -Pass (@($zipEntries | Where-Object { $_ -match 'Run-Cleanup|Run-Monthly|Restore-All' }).Count -eq 0)
+    Test-SuiteCheck -Name 'Zip: .git/Logs/Backups excluded' -Pass (@($zipEntries | Where-Object { $_ -match '(^|/)\.git/|(^|/)Logs/|(^|/)Backups/' }).Count -eq 0)
+} finally {
+    if (Test-Path $zipTest) { Remove-Item $zipTest -Force -ErrorAction SilentlyContinue }
+}
 
 # --- 5. Menu smoke test (non-interactive, preview only; nothing should change) --------
 $menuScript = Join-Path $SuiteRoot 'Runners\Run-Menu.ps1'
