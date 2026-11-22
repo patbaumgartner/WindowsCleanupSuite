@@ -5,14 +5,17 @@
     Release zip (or, when no release exists yet, the branch source archive),
     extracts it, and launches the interactive menu (Runners\Run-Menu.ps1).
 
-    Run directly with PowerShell (the Raphire/Win11Debloat style):
+    Run directly with PowerShell (the Raphire/Win11Debloat style) - the `| iex`
+    is what executes it; plain `irm <url>` only prints the script:
 
-      irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1
+      irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 | iex
 
     Or via curl (Windows):
 
-      curl.exe https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 -o "%TEMP%\Launcher.ps1"
-      powershell -File "%TEMP%\Launcher.ps1"
+      curl.exe -L https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 -o "%TEMP%\Launcher.ps1"
+      powershell -NoProfile -ExecutionPolicy Bypass -File "%TEMP%\Launcher.ps1"
+
+    Works on Windows PowerShell 5.1 and PowerShell 7.x.
 
     It extracts the zip and runs the extracted menu, so you always get the
     latest published version (and can re-run the launcher to update later).
@@ -35,8 +38,10 @@
     Preview the steps (URL, extract dir, menu path) without downloading or running.
 
 .EXAMPLE
-    irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1
+    irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 | iex
 #>
+# NOTE: `irm <url>` alone only prints the script text - always pipe to `iex`
+# (or download it and run with -File) to actually execute the launcher.
 [CmdletBinding()]
 param(
     [string]$ZipUrl,

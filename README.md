@@ -59,13 +59,15 @@ Release zip, extracts it to `%TEMP%\WindowsCleanupSuite` and launches the menu. 
 **curl-friendly and the Raphire/Win11Debloat style**:
 
 ```powershell
-# PowerShell (recommended):
-irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1
+# PowerShell (recommended) - the `| iex` is what executes it; plain `irm <url>` only prints the script:
+irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 | iex
 
 # curl (Windows):
-curl.exe https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 -o "%TEMP%\Launcher.ps1"
-powershell -File "%TEMP%\Launcher.ps1"
+curl.exe -L https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 -o "%TEMP%\Launcher.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%TEMP%\Launcher.ps1"
 ```
+
+Works on Windows PowerShell 5.1 and PowerShell 7.x (verified on 5.1.26100 and 7.1.5).
 
 Re-run it any time to update (it always extracts the latest release).
 You can also run it locally: `Launcher.ps1 -WhatIf` (dry run).

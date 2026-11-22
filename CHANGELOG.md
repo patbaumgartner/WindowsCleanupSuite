@@ -5,7 +5,7 @@ All notable changes to WindowsCleanupSuite will be documented in this file.
 ## [1.0.0] - 2026-11-21 - self-executing launcher
 
 - **Launcher.ps1** — self-executing, curl-friendly download-and-run (the Raphire/Win11Debloat
-  style): `irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1`
+  style): `irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 | iex`
   fetches the latest GitHub Release zip, extracts it to `%TEMP%\WindowsCleanupSuite` and launches the menu.
   (GitHub API unavailable from this sandbox - verified: curl.exe to api.github.com fails.)
 
@@ -15,6 +15,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 = first publishable release).
 
 ## [Unreleased]
+
+### Fixed
+- **Launcher one-liner docs**: the README/help showed `irm <url>` alone, which only *prints*
+  the script and never executes it (on any PowerShell version) — that is why the "self-executing
+  download" appeared not to work. Docs now show `irm <url> | iex` (Win11Debloat style) and a
+  hardened curl variant (`curl.exe -L … -o …` + `powershell -NoProfile -ExecutionPolicy Bypass -File …`).
+  Verified end-to-end on **Windows PowerShell 5.1.26100** and **PowerShell 7.1.5**: `-WhatIf` dry run,
+  full release-zip download + extract, and `irm <url> | iex` all exit 0 and launch `Runners\Run-Menu.ps1`.
+
+### Added
+- **PS 5.1 compatibility guard**: new `Tests\Invoke-PS51ParseCheck.ps1` parses every `.ps1`/`.psd1`
+  with the Windows PowerShell 5.1 parser; CI runs it via `powershell.exe` on every build and the
+  test suite runs it when available. New tests also assert the one-liner docs use `| iex` and that
+  `Launcher.ps1` contains no PS7-only operators (`??`, `?.`, `&&`, `||`).
 
 ## [1.1.0] - 2026-11-22 - legacy entry points removed
 
