@@ -67,4 +67,11 @@ jobs:
           $sha = "$zip.SHA256"
           $title = "WindowsCleanupSuite $tag"
           $assets = @((Join-Path $env:GITHUB_WORKSPACE $zip), (Join-Path $env:GITHUB_WORKSPACE $sha))
+          # gh release create fails when the release already exists; delete it
+          # first so re-pushing a tag (e.g. after a history rewrite) works.
+          $existing = gh release view $tag -R ${{ github.repository }} --json tagName -q .tagName 2>$null
+          if ($existing) {
+            Write-Host "Release $tag already exists - deleting it before recreating."
+            gh release delete $tag --yes -R ${{ github.repository }}
+          }
           gh release create $tag --title $title --notes-file CHANGELOG.md -R ${{ github.repository }} $assets
