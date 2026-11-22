@@ -65,7 +65,12 @@ foreach ($entry in @($manifest.Win32Apps)) {
                     Values = $values
                 }
                 New-SuiteBackupFile -BackupRoot $backupRoot -FileName "win32_$(Get-SuiteSafeFileName $displayName).json" -Record $record
-                $proc = Start-Process -FilePath cmd.exe -ArgumentList '/c', $ip.UninstallString -Wait -PassThru -ErrorAction SilentlyContinue
+                try {
+                    $proc = Start-Process -FilePath cmd.exe -ArgumentList '/c', $ip.UninstallString -Wait -PassThru -ErrorAction SilentlyContinue
+                } catch {
+                    Write-Warning "  Could not start uninstaller for '$displayName': $($_.Exception.Message) (backup kept in $backupRoot)"
+                    $proc = $null
+                }
                 $exitCode = if ($proc) { $proc.ExitCode } else { $null }
                 if ($null -eq $exitCode -or $exitCode -eq 0) {
                     Write-Host "  Removed Win32 app: $displayName"
@@ -110,13 +115,19 @@ foreach ($entry in @($manifest.UwpApps)) {
         New-SuiteBackupFile -BackupRoot $backupRoot -FileName "uwp_removed_$(Get-SuiteSafeFileName $app.Name).json" -Record @{
             Type = 'UwpRemoved'; Name = $app.Name; PackageFullName = $app.PackageFullName; Scope = $scope
         }
-        if ($canAllUsers) {
-            Remove-AppxPackage -AllUsers -Package $app.PackageFullName -ErrorAction SilentlyContinue | Out-Null
-        } else {
-            Remove-AppxPackage -Package $app.PackageFullName -ErrorAction SilentlyContinue | Out-Null
-            Write-Host "  Note: current-user UWP removal is recorded but not auto-restorable - reinstall from the Microsoft Store if needed."
+        # Some packages (e.g. Microsoft.GetHelp) throw a TERMINATING "Access is denied"
+        # even for admins - catch per app so one failure does not abort the whole run.
+        try {
+            if ($canAllUsers) {
+                Remove-AppxPackage -AllUsers -Package $app.PackageFullName -ErrorAction SilentlyContinue | Out-Null
+            } else {
+                Remove-AppxPackage -Package $app.PackageFullName -ErrorAction SilentlyContinue | Out-Null
+                Write-Host "  Note: current-user UWP removal is recorded but not auto-restorable - reinstall from the Microsoft Store if needed."
+            }
+            Write-Host "  Removed UWP app ($scope): $($app.Name)"
+        } catch {
+            Write-Warning "  Could not remove UWP app $($app.Name): $($_.Exception.Message) (backup kept in $backupRoot)"
         }
-        Write-Host "  Removed UWP app ($scope): $($app.Name)"
     }
 
     # Provisioned packages (what Windows pre-installs) - only available elevated
@@ -125,8 +136,12 @@ foreach ($entry in @($manifest.UwpApps)) {
         foreach ($pkg in @(Get-AppxProvisionedPackage -Online -AllUsers -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like $pattern })) {
             $record = @{ Type = 'UwpProvisioned'; DisplayName = $pkg.DisplayName; PublisherId = $pkg.PublisherId; Architecture = $pkg.Architecture }
             New-SuiteBackupFile -BackupRoot $backupRoot -FileName "uwp_$(Get-SuiteSafeFileName $pkg.DisplayName).json" -Record $record
-            Remove-AppxProvisionedPackage -Online -AllUsers -PackageName $pkg.DisplayName -ErrorAction SilentlyContinue | Out-Null
-            Write-Host "  Removed provisioned app: $($pkg.DisplayName)"
+            try {
+                Remove-AppxProvisionedPackage -Online -AllUsers -PackageName $pkg.DisplayName -ErrorAction SilentlyContinue | Out-Null
+                Write-Host "  Removed provisioned app: $($pkg.DisplayName)"
+            } catch {
+                Write-Warning "  Could not remove provisioned app $($pkg.DisplayName): $($_.Exception.Message) (backup kept in $backupRoot)"
+            }
         }
     } catch {
         # Provisioned-package removal requires elevation; skip quietly if unavailable.
