@@ -39,6 +39,8 @@ function New-WCSZip {
     try {
         $count = 0
         foreach ($item in (Get-ChildItem -Path $SourceRoot -File -Recurse -Force -ErrorAction SilentlyContinue)) {
+            # Never add the archive into itself (the destination often lives in SourceRoot).
+            if ($item.FullName -ieq $DestinationPath) { continue }
             $rel = $item.FullName.Substring($SourceRoot.Length).TrimStart('\', '/') -replace '\\', '/'
             $segments = $rel -split '/'
             $dirSegments = if ($segments.Count -gt 1) { $segments[0..($segments.Count - 2)] } else { @() }

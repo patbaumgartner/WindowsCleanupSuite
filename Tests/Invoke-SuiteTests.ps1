@@ -283,8 +283,11 @@ Test-SuiteCheck -Name 'WindowsSpeedup Disable has -AllowRisky + risky gates (ser
 #  so the 14 Manifest.psd1 would collide and the extracted suite would be unusable.)
 . (Join-Path $SuiteRoot 'Tools\New-WCSZip.ps1')
 $zipTest = Join-Path ([System.IO.Path]::GetTempPath()) "wcs-zip-test-$PID.zip"
+$zipInRoot = Join-Path $SuiteRoot "wcs-zip-test-$PID.zip"
 try {
     $null = New-WCSZip -DestinationPath $zipTest -ExcludeDirNames '.git', 'Logs', 'Backups'
+    # Destination inside the source root must not end up inside itself.
+    $null = New-WCSZip -DestinationPath $zipInRoot -ExcludeDirNames '.git', 'Logs', 'Backups'
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $z = [System.IO.Compression.ZipFile]::OpenRead($zipTest)
     $zipEntries = @($z.Entries | ForEach-Object { $_.FullName })
@@ -295,8 +298,10 @@ try {
     Test-SuiteCheck -Name 'Zip: all 14 Manifest.psd1 present (no name collisions)' -Pass (@($zipEntries | Where-Object { $_ -like '*/Manifest.psd1' }).Count -eq 14)
     Test-SuiteCheck -Name 'Zip: no legacy runners in archive' -Pass (@($zipEntries | Where-Object { $_ -match 'Run-Cleanup|Run-Monthly|Restore-All' }).Count -eq 0)
     Test-SuiteCheck -Name 'Zip: .git/Logs/Backups excluded' -Pass (@($zipEntries | Where-Object { $_ -match '(^|/)\.git/|(^|/)Logs/|(^|/)Backups/' }).Count -eq 0)
+    Test-SuiteCheck -Name 'Zip: destination inside source root is not archived into itself' -Pass (Test-Path $zipInRoot)
 } finally {
     if (Test-Path $zipTest) { Remove-Item $zipTest -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $zipInRoot) { Remove-Item $zipInRoot -Force -ErrorAction SilentlyContinue }
 }
 
 # --- 5. Menu smoke test (non-interactive, preview only; nothing should change) --------
