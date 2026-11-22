@@ -73,14 +73,14 @@ function Write-WCSMenuHeader {
 }
 
 function Get-WCSMenuInput {
-    <# Read-Host loop that retries up to $MaxTries times and returns $null on empty/timeout. #>
-    param([int]$MaxTries = 5, [string]$Prompt)
+    <# Reads ONE line and returns it trimmed. '' = user pressed Enter (accept default)
+       and is returned IMMEDIATELY - retrying on empty input made Enter look ignored.
+       $null is returned only when no input is available at all (EOF on piped stdin). #>
+    param([int]$MaxTries = 5, [string]$Prompt)  # MaxTries kept for compatibility; unused
 
-    for ($i = 0; $i -lt $MaxTries; $i++) {
-        $value = Read-Host $Prompt
-        if (-not [string]::IsNullOrWhiteSpace([string]$value)) { return ([string]$value).Trim() }
-    }
-    return $null
+    $value = Read-Host $Prompt
+    if ($null -eq $value) { return $null }
+    return ([string]$value).Trim()
 }
 
 function Read-WCSPreferences {
@@ -127,6 +127,7 @@ function Show-WCSLevelMenu {
     while ($true) {
         $choice = Get-WCSMenuInput -MaxTries 4 -Prompt 'Level'
         if ($null -eq $choice -or $choice -in @('q', 'quit')) { return $null }
+        if ($choice -eq '') { return $defaultKey }   # Enter = accept the default (marked with *)
         try {
             $key = ConvertFrom-WCSLevelInput -LevelString $choice
             if ($key -in @((Get-WCSLevelDefinitions).Key)) { return $key }
@@ -345,11 +346,13 @@ function Invoke-WCSActionMenu {
                 }
             }
             'h' { Show-WCSHelp }
+            ''  { return }   # Enter at the action menu = exit (same as 0)
+            '0' { return }
             default {
-                Write-Host '  Invalid or empty input - type a number between 0 and 6.' -ForegroundColor Yellow
+                Write-Host '  Invalid input - type a number between 0 and 6.' -ForegroundColor Yellow
             }
         }
-        if ($choice -in @('0', '') -or $null -eq $choice) {
+        if ($null -eq $choice) {
             return
         }
     }
@@ -443,4 +446,7 @@ else {
     if ($SavePreferences) { Save-WCSPreferences -LevelKey $levelKey -TopicNames $topicNames }
 }
 
+# Always exit explicitly: without this, a fall-through leaves $LASTEXITCODE at
+# whatever the last native command set, and Runners\Run-Menu.ps1 would inherit it.
 if ($global:WCS_MenuFailed) { exit 1 }
+exit 0
