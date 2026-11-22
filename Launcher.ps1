@@ -116,12 +116,30 @@ if (-not (Test-Path $zipFile)) { Write-Error "Download failed (no file at $zipFi
 
 if (-not $InstallDir) { $InstallDir = Join-Path $env:TEMP 'WindowsCleanupSuite' }
 Write-Host "Extracting to: $InstallDir"
-if (Test-Path $InstallDir) { Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue }
+# Wipe any previous extraction so stale files from an older release can never
+# mix into the new one ("Missing script" warnings). Removal can fail on locked
+# files (e.g. a suite instance still running from that dir) - retry, and if it
+# still fails, fall back to a fresh timestamped directory instead of merging.
+if (Test-Path $InstallDir) {
+    $removed = $false
+    for ($i = 0; $i -lt 3 -and -not $removed; $i++) {
+        Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path $InstallDir)) { $removed = $true } else { Start-Sleep -Seconds 2 }
+    }
+    if (-not $removed) {
+        $InstallDir = Join-Path $env:TEMP ("WindowsCleanupSuite-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        Write-Host "  Previous install dir was locked - using a fresh dir instead: $InstallDir" -ForegroundColor Yellow
+    }
+}
 try {
     Expand-Archive -Path $zipFile -DestinationPath $InstallDir -Force -ErrorAction Stop
 } catch {
     Write-Error "Failed to extract $zipFile to $InstallDir - $($_.Exception.Message)"
     exit 1
+}
+# Sanity: a correct release zip keeps the directory structure (Cleanups\, Runners\).
+if (-not (Test-Path (Join-Path $InstallDir 'Cleanups')) -or -not (Test-Path (Join-Path $InstallDir 'Runners'))) {
+    Write-Warning "Extracted suite at $InstallDir looks incomplete (no Cleanups\\ or Runners\\) - the archive layout may be wrong."
 }
 
 # --- Launch -------------------------------------------------------------------------
@@ -136,7 +154,8 @@ if ($Launch) {
     exit $LASTEXITCODE
 } else {
     # Branch archives extract with a top-level '<repo>-<branch>' folder; release
-    # zips are flat - locate the menu recursively and print the real path.
+    # zips keep the repo layout (Runners\Run-Menu.ps1) - locate the menu
+    # recursively anyway so both layouts work.
     $menuPath = Get-ChildItem -Path $InstallDir -Recurse -Filter 'Run-Menu.ps1' -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($menuPath) {
         Write-Host "Suite extracted to $InstallDir. Launch with: & '$($menuPath.FullName)'" -ForegroundColor Gray
