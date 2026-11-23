@@ -38,6 +38,11 @@
     Also apply entries flagged Risky = $true in the manifest
     (VPN/Citrix services, Windows Search indexing, cross-device platform).
 
+.PARAMETER Quick
+    Fast preview: exact-name service/task entries are probed directly
+    (Get-Service -Name / Get-ScheduledTask -TaskPath+TaskName) instead of enumerating
+    every service/task on the machine; pattern entries still need the full enumeration.
+
 .EXAMPLE
     & '.\Disable-ServicesAndTasks.ps1' -WhatIf
     & '.\Disable-ServicesAndTasks.ps1' -Profile Balanced
@@ -52,7 +57,9 @@ param(
 
     [switch]$SkipProcessStops,
 
-    [switch]$AllowRisky
+    [switch]$AllowRisky,
+
+    [switch]$Quick
 )
 
 . (Join-Path $PSScriptRoot '..\..\Core\CleanupEngine.ps1')
@@ -70,7 +77,10 @@ function Disable-SuiteService {
     param([psobject]$Entry)
 
     $matches = @()
-    if ($Entry.NamePattern) {
+    if ($Quick -and -not $Entry.NamePattern) {
+        # -Quick: probe the exact service name directly instead of enumerating all services.
+        try { $matches = @(Get-Service -Name $Entry.Name -ErrorAction Stop) } catch { $matches = @() }
+    } elseif ($Entry.NamePattern) {
         $matches = @(Get-SuiteCachedServices | Where-Object { $_.Name -like $Entry.NamePattern })
     } else {
         $matches = @(Get-SuiteCachedServices | Where-Object { $_.Name -eq $Entry.Name })
@@ -138,7 +148,10 @@ function Disable-SuiteScheduledTask {
 
     $matches = @()
     $path = $null
-    if ($Entry.NamePattern) {
+    if ($Quick -and -not $Entry.NamePattern) {
+        # -Quick: probe the exact task path\name directly instead of enumerating all tasks.
+        try { $matches = @(Get-ScheduledTask -TaskName $Entry.Name -TaskPath $Entry.Path -ErrorAction Stop) } catch { $matches = @() }
+    } elseif ($Entry.NamePattern) {
         if ($Entry.PathPattern) {
             $path = $Entry.PathPattern
         } elseif ($Entry.Path) {
@@ -191,14 +204,18 @@ foreach ($entry in @($manifest.Tasks)) {
 
 # OneDrive background/update/startup tasks (names vary by SID).
 if (-not $LoginSafe) {
-    $oneDriveTasks = @(Get-SuiteCachedTasks |
-        Where-Object {
-            $_.TaskName -eq 'OneDrive Per-Machine Standalone Update Task' -or
-            $_.TaskName -like 'OneDrive Reporting Task-*' -or
-            $_.TaskName -like 'OneDrive Startup Task-*'
-        })
-    foreach ($task in $oneDriveTasks) {
-        Disable-SuiteScheduledTask -Entry ([pscustomobject]@{ Path = $task.TaskPath; Name = $task.TaskName; Reason = 'OneDrive background/update task' })
+    if ($Quick) {
+        Write-Host '  [task]    Skipped OneDrive pattern scan (-Quick)'
+    } else {
+        $oneDriveTasks = @(Get-SuiteCachedTasks |
+            Where-Object {
+                $_.TaskName -eq 'OneDrive Per-Machine Standalone Update Task' -or
+                $_.TaskName -like 'OneDrive Reporting Task-*' -or
+                $_.TaskName -like 'OneDrive Startup Task-*'
+            })
+        foreach ($task in $oneDriveTasks) {
+            Disable-SuiteScheduledTask -Entry ([pscustomobject]@{ Path = $task.TaskPath; Name = $task.TaskName; Reason = 'OneDrive background/update task' })
+        }
     }
 } else {
     Write-Host '  [task]    Skipped OneDrive scheduled task changes (LoginSafe)'

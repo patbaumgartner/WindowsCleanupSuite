@@ -12,11 +12,17 @@
 .PARAMETER WhatIf
     Preview mode - shows what would change without touching the system.
 
+.PARAMETER Quick
+    Fast preview: skips the recursive per-file scan of every junk directory (the
+    expensive full-machine scan) and only reports the patterns that would be cleaned.
+
 .EXAMPLE
     & 'WindowsCleanupSuite\Cleanups\TempAndJunkFiles\Disable-TempAndJunkFiles.ps1' -WhatIf
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
-param()
+param(
+    [switch]$Quick
+)
 
 . (Join-Path $PSScriptRoot '..\..\Core\CleanupEngine.ps1')
 
@@ -40,14 +46,27 @@ function Remove-JunkContents {
 foreach ($dir in @($manifest.Directories)) { Remove-JunkContents -Path (Resolve-JunkPath $dir) }
 
 if (@($manifest.FilePatterns).Count) {
-    foreach ($dir in @($manifest.Directories)) {
-        $resolved = Resolve-JunkPath $dir
-        if (-not (Test-Path $resolved)) { continue }
+    if ($Quick) {
+        # -Quick: the recursive Get-ChildItem over every junk directory is the expensive
+        # full-machine scan - skip it and just report the patterns that would be cleaned.
+        $quickDirs = @(@($manifest.Directories) | ForEach-Object { Resolve-JunkPath $_ } | Where-Object { Test-Path $_ })
         foreach ($pattern in @($manifest.FilePatterns)) {
-            $files = @(Get-ChildItem -Path $resolved -Include $pattern -Recurse -File -ErrorAction SilentlyContinue)
-            if (-not $files.Count) { continue }
-            if (-not $PSCmdlet.ShouldProcess($resolved, "Delete files matching '$pattern' in junk directories")) { Write-Host "  Would delete: $pattern in $resolved"; continue }
-            try { $files | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue; Write-Host "  Deleted $($files.Count) files matching '$pattern' in $resolved" } catch { Write-Warning "  Failed: $($_.Exception.Message)" }
+            if (-not $PSCmdlet.ShouldProcess(($quickDirs -join '; '), "Delete files matching '$pattern' in junk directories")) {
+                Write-Host "  Would delete: $pattern in $($quickDirs.Count) junk dir(s) (-Quick: file count skipped)"
+            } else {
+                Write-Host "  (-Quick) Pattern scan skipped (quick mode is preview-only): $pattern"
+            }
+        }
+    } else {
+        foreach ($dir in @($manifest.Directories)) {
+            $resolved = Resolve-JunkPath $dir
+            if (-not (Test-Path $resolved)) { continue }
+            foreach ($pattern in @($manifest.FilePatterns)) {
+                $files = @(Get-ChildItem -Path $resolved -Include $pattern -Recurse -File -ErrorAction SilentlyContinue)
+                if (-not $files.Count) { continue }
+                if (-not $PSCmdlet.ShouldProcess($resolved, "Delete files matching '$pattern' in junk directories")) { Write-Host "  Would delete: $pattern in $resolved"; continue }
+                try { $files | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue; Write-Host "  Deleted $($files.Count) files matching '$pattern' in $resolved" } catch { Write-Warning "  Failed: $($_.Exception.Message)" }
+            }
         }
     }
 }

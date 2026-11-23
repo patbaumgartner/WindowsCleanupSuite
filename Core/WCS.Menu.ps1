@@ -30,6 +30,25 @@
 .PARAMETER SavePreferences
     Write the selected level+topics to Config\UserPreferences.json (interactive defaults source).
 
+.PARAMETER Quick
+    Preview-only fast mode: skips the expensive full-machine scans (Uninstall-key
+    enumeration, provisioned-package scan, recursive junk-file scan, full
+    service/task enumeration). Cannot be combined with -Apply.
+
+.PARAMETER NoParallel
+    Disables the parallel preview (runspace pool); topic scripts run sequentially.
+
+.PARAMETER MaxParallel
+    Maximum number of cleanup scripts running concurrently in preview mode (default 4).
+
+.PARAMETER ScheduleDays
+    Non-interactive scheduled re-run management: N >= 1 registers the re-run task every
+    N days (honoring AutoReRunDays/Level/Topics from Config\UserPreferences.json),
+    0 unregisters it, -1 uses the stored AutoReRunDays. Exits after the action.
+
+.PARAMETER ReviewBackups
+    Non-interactive: list all backup records (Tools\Review-WCSBackup.ps1 -List) and exit.
+
 .EXAMPLE
     Runners\Run-Menu.ps1                                     # interactive menu
     Runners\Run-Menu.ps1 -Level 2 -Topics 'ServicesTasks,PrivacySettings'  # non-interactive preview
@@ -49,7 +68,17 @@ param(
 
     [switch]$SavePreferences,
 
-    [switch]$AllowRisky
+    [switch]$AllowRisky,
+
+    [switch]$Quick,
+
+    [switch]$NoParallel,
+
+    [int]$MaxParallel = 4,
+
+    [int]$ScheduleDays = -1,
+
+    [switch]$ReviewBackups
 )
 
 $SuiteRoot = Split-Path -Parent $PSScriptRoot
@@ -103,7 +132,10 @@ function Save-WCSPreferences {
         $configDir = Join-Path (Get-SuiteRoot) 'Config'
         if (-not (Test-Path $configDir)) { New-Item -ItemType Directory -Path $configDir -Force | Out-Null }
         $file = Join-Path $configDir 'UserPreferences.json'
-        $prefs = [ordered]@{ Level = $LevelKey; Topics = [string[]]$TopicNames; AutoReRunDays = 7; Created = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') }
+        # Preserve a previously stored AutoReRunDays (the scheduler reads it); default 7.
+        $existing = Read-WCSPreferences
+        $autoDays = if ($existing -and $existing.AutoReRunDays) { [int]$existing.AutoReRunDays } else { 7 }
+        $prefs = [ordered]@{ Level = $LevelKey; Topics = [string[]]$TopicNames; AutoReRunDays = $autoDays; Created = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') }
         $prefs | ConvertTo-Json | Set-Content -Path $file -Encoding UTF8
         Write-Host "  Saved preferences: $file" -ForegroundColor Gray
     } catch {
@@ -173,59 +205,186 @@ function Show-WCSTopicMenu {
     }
 }
 
-function Invoke-WCSTopicCleanups {
-    <# Runs the cleanup scripts for each selected topic (preview when no -Apply). #>
+function Get-WCSCleanupJobArgs {
+    <# Argument hashtable for one cleanup script invocation (splatted at the call site). #>
+    param(
+        [string]$Script,
+        [psobject]$Level,
+        [switch]$Apply,
+        [switch]$AllowRisky,
+        [switch]$Quick
+    )
+    $jobArgs = @{}
+    if ($Script -eq 'Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1') {
+        # Profile comes from the level; LoginSafe stays on (as before).
+        $jobArgs['Profile'] = $Level.Profile
+        $jobArgs['LoginSafe'] = $true
+        $jobArgs['AllowRisky'] = [bool]$AllowRisky
+        if ($Quick) { $jobArgs['Quick'] = $true }
+    } elseif ($Script -eq 'Cleanups\PrivacySettings\Disable-PrivacySettings.ps1' -or $Script -eq 'Cleanups\ExtremeExtras\Disable-ExtremeExtras.ps1') {
+        $jobArgs['Level'] = $Level.Level
+    } elseif ($Script -eq 'Cleanups\WindowsUpdates\Disable-WindowsUpdates.ps1') {
+        $jobArgs['Level'] = $Level.Level
+    } elseif ($Script -in @('Cleanups\Privacy\Disable-Privacy.ps1', 'Cleanups\Browsers\Disable-Browsers.ps1', 'Cleanups\Network\Disable-Network.ps1')) {
+        # Privacy/Browsers/Network: apply inherently; menu -AllowRisky opts in to Risky items.
+        $jobArgs['AllowRisky'] = [bool]$AllowRisky
+    } else {
+        # -Quick only reaches the heavy scanners (unknown params would throw on the others).
+        if ($Quick -and $Script -in @('Cleanups\InstalledSoftware\Disable-InstalledSoftware.ps1', 'Cleanups\TempAndJunkFiles\Disable-TempAndJunkFiles.ps1')) {
+            $jobArgs['Quick'] = $true
+        }
+    }
+    if (-not $Apply) { $jobArgs['WhatIf'] = $true }   # preview = -WhatIf, apply = run without
+    return $jobArgs
+}
+
+function New-WCSTopicJobs {
+    <# Expands level+topics into an ordered list of cleanup-script jobs. #>
     param(
         [ValidateSet('Safe', 'Balanced', 'Aggressive', 'Extreme')][string]$LevelKey,
         [string[]]$Topics,
         [switch]$Apply,
-        [switch]$AllowRisky
+        [switch]$AllowRisky,
+        [switch]$Quick
     )
-
-    $level = (Get-WCSLevelByKey $LevelKey)
+    $level = Get-WCSLevelByKey $LevelKey
     $root = Get-SuiteRoot
-
+    $jobs = @()
     foreach ($topicName in $Topics) {
         $topic = @(Get-WCSValidTopicByName -Topic $topicName)[0]
         if (-not $topic) {
             Write-Error "  Unknown topic: $topicName"
             $global:WCS_MenuFailed = $true
-            return
+            return $null
         }
-
-        Write-Host "=== $($topic.Topic) ===" -ForegroundColor Magenta
-        Write-Host "    $($topic.Description)"
-
         foreach ($script in $topic.Cleanups) {
             $path = Join-Path $root $script
             if (-not (Test-Path $path)) { Write-Warning "  Missing script: $script"; continue }
-
-            $LASTEXITCODE = $null
-            $failed = $false
-            try {
-                if ($script -eq 'Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1') {
-                    # Profile comes from the level; LoginSafe stays on (as before).
-                    # Preview = -WhatIf, apply = run without -WhatIf.
-                    if ($Apply) { & $path -Profile $level.Profile -LoginSafe -AllowRisky:$AllowRisky } else { & $path -WhatIf -Profile $level.Profile -LoginSafe -AllowRisky:$AllowRisky }
-                } elseif ($script -eq 'Cleanups\PrivacySettings\Disable-PrivacySettings.ps1' -or $script -eq 'Cleanups\ExtremeExtras\Disable-ExtremeExtras.ps1') {
-                    if ($Apply) { & $path -Level $level.Level } else { & $path -WhatIf -Level $level.Level }
-                } elseif ($script -eq 'Cleanups\WindowsUpdates\Disable-WindowsUpdates.ps1') {
-                    if ($Apply) { & $path -Level $level.Level } else { & $path -WhatIf -Level $level.Level }
-                } elseif ($script -in @('Cleanups\Privacy\Disable-Privacy.ps1', 'Cleanups\Browsers\Disable-Browsers.ps1', 'Cleanups\Network\Disable-Network.ps1')) {
-                    # Privacy/Browsers/Network: apply inherently; menu -AllowRisky opts in to Risky items.
-                    if ($Apply) { & $path -AllowRisky:$AllowRisky } else { & $path -WhatIf -AllowRisky:$AllowRisky }
-                } else {
-                    # Other cleanups have SupportsShouldProcess only (no -Apply param):
-                    # apply = run without -WhatIf; preview = pass -WhatIf.
-                    if ($Apply) { & $path } else { & $path -WhatIf }
-                }
-            } catch {
-                $failed = $true
-                Write-Warning "  Script failed: $script - $($_.Exception.Message)"
+            $jobs += [pscustomobject]@{
+                Topic       = $topic.Topic
+                Description = $topic.Description
+                Script      = $script
+                Path        = $path
+                Args        = Get-WCSCleanupJobArgs -Script $script -Level $level -Apply:$Apply -AllowRisky:$AllowRisky -Quick:$Quick
             }
-
-            if ($failed -or ($LASTEXITCODE -and $LASTEXITCODE -ne 0)) { $global:WCS_MenuFailed = $true }
         }
+    }
+    return $jobs
+}
+
+function Invoke-WCSSequentialCleanups {
+    <# Runs the cleanup jobs one by one, printing a topic header when the topic changes. #>
+    param([psobject[]]$Jobs)
+    $lastTopic = $null
+    foreach ($job in $Jobs) {
+        if ($job.Topic -ne $lastTopic) {
+            Write-Host "=== $($job.Topic) ===" -ForegroundColor Magenta
+            Write-Host "    $($job.Description)"
+            $lastTopic = $job.Topic
+        }
+        $LASTEXITCODE = $null
+        $failed = $false
+        try {
+            $argHash = $job.Args
+            & $job.Path @argHash
+        } catch {
+            $failed = $true
+            Write-Warning "  Script failed: $($job.Script) - $($_.Exception.Message)"
+        }
+        if ($failed -or ($LASTEXITCODE -and $LASTEXITCODE -ne 0)) { $global:WCS_MenuFailed = $true }
+    }
+}
+
+function Invoke-WCSParallelCleanups {
+    <# Preview-only concurrency: PS 5.1 has no ForEach-Object -Parallel, so the cleanup
+       scripts run in a runspace pool. Only used without -Apply (every job then runs with
+       -WhatIf => read-only) and each runspace has its own $global scope, so the cached
+       service/task enumerations cannot race. Output is collected per job (*>&1 captures
+       Write-Host/Write-Warning as records) and printed in the original topic order. #>
+    param([psobject[]]$Jobs, [int]$MaxParallel = 4)
+
+    $runnerScript = @'
+param([string]$ScriptPath, [hashtable]$JobArgs)
+$captured = @()
+$exit = $null
+try {
+    $captured = @(& $ScriptPath @JobArgs *>&1)
+    $exit = $LASTEXITCODE
+} catch {
+    $captured += $_
+}
+[pscustomobject]@{ Output = $captured; ExitCode = $exit }
+'@
+
+    $max = [Math]::Max(1, [Math]::Min($MaxParallel, $Jobs.Count))
+    $pool = $null
+    $instances = @()
+    try {
+        $pool = [runspacefactory]::CreateRunspacePool(1, $max)
+        $pool.ApartmentState = 'STA'
+        $pool.Open()
+        $asyncs = @()
+        foreach ($job in $Jobs) {
+            $ps = [powershell]::Create()
+            $ps.RunspacePool = $pool
+            $ps.AddScript($runnerScript) | Out-Null
+            $ps.AddArgument($job.Path) | Out-Null
+            $ps.AddArgument($job.Args) | Out-Null
+            $instances += $ps
+            $asyncs += $ps.BeginInvoke()
+        }
+        $lastTopic = $null
+        for ($i = 0; $i -lt $Jobs.Count; $i++) {
+            $result = @($instances[$i].EndInvoke($asyncs[$i]))
+            $job = $Jobs[$i]
+            if ($job.Topic -ne $lastTopic) {
+                Write-Host "=== $($job.Topic) ===" -ForegroundColor Magenta
+                Write-Host "    $($job.Description)"
+                $lastTopic = $job.Topic
+            }
+            if ($result.Count -and $result[0]) {
+                foreach ($line in @($result[0].Output)) {
+                    if ($null -eq $line) { continue }
+                    if ($line -is [System.Management.Automation.InformationRecord]) { Write-Host $line.MessageData }
+                    elseif ($line -is [System.Management.Automation.WarningRecord]) { Write-Warning $line.Message }
+                    elseif ($line -is [System.Management.Automation.ErrorRecord]) { Write-Host "  ERROR: $($line.Exception.Message)" -ForegroundColor Red; $global:WCS_MenuFailed = $true }
+                    else { Write-Host $line }
+                }
+                $ec = $result[0].ExitCode
+                if ($ec -and $ec -ne 0) { $global:WCS_MenuFailed = $true }
+            }
+        }
+    } catch {
+        # Preview is read-only, so re-running sequentially after a pool failure is safe.
+        Write-Warning "  Parallel preview failed ($($_.Exception.Message)) - falling back to sequential preview."
+        Invoke-WCSSequentialCleanups -Jobs $Jobs
+    } finally {
+        foreach ($ps in $instances) { try { $ps.Dispose() } catch { } }
+        if ($pool) { try { $pool.Close(); $pool.Dispose() } catch { } }
+    }
+}
+
+function Invoke-WCSTopicCleanups {
+    <# Runs the cleanup scripts for each selected topic (preview when no -Apply).
+       Preview runs are parallelized across scripts via a runspace pool unless
+       -NoParallel is given; -Apply always runs sequentially (ordered, single scope). #>
+    param(
+        [ValidateSet('Safe', 'Balanced', 'Aggressive', 'Extreme')][string]$LevelKey,
+        [string[]]$Topics,
+        [switch]$Apply,
+        [switch]$AllowRisky,
+        [switch]$Quick,
+        [switch]$NoParallel,
+        [int]$MaxParallel = 4
+    )
+
+    $jobs = @(New-WCSTopicJobs -LevelKey $LevelKey -Topics $Topics -Apply:$Apply -AllowRisky:$AllowRisky -Quick:$Quick | Where-Object { $null -ne $_ })
+    if (-not $jobs.Count) { return }
+
+    if ($Apply -or $NoParallel -or $jobs.Count -eq 1) {
+        Invoke-WCSSequentialCleanups -Jobs $jobs
+    } else {
+        Invoke-WCSParallelCleanups -Jobs $jobs -MaxParallel $MaxParallel
     }
 }
 
@@ -279,14 +438,18 @@ function Show-WCSHelp {
     topics have Risky items; use -AllowRisky in NonInteractive mode to allow them.
 
   Actions:
-    1 Run debloat (preview)          3 Updates + re-debloat afterwards
-    2 Apply debloat (needs Admin)    4 Schedule auto re-run (weekly)
-    5 Revert/Restore backups         6 Run audits (state/installed/services)
+    1 Run debloat (preview, parallel)  3 Updates + re-debloat afterwards
+    2 Apply debloat (needs Admin)      4 Schedule auto re-run (AutoReRunDays pref)
+    5 Review backups, then restore     6 Run audits (state/installed/services)
     0 Exit
 
   CLI (non-interactive):
     Runners\Run-Menu.ps1 -Level 2 -Topics 'ServicesTasks,PrivacySettings'
-    Runners\Run-Menu.ps1 -Level 3 -Apply   # level 3, all default topics, apply
+    Runners\Run-Menu.ps1 -Level 2 -Quick                    # fast preview, skips heavy scans
+    Runners\Run-Menu.ps1 -Level 3 -Apply                    # level 3, all default topics, apply
+    Runners\Run-Menu.ps1 -ScheduleDays 7                    # register periodic auto re-run
+    Runners\Run-Menu.ps1 -ScheduleDays 0                    # unregister auto re-run
+    Runners\Run-Menu.ps1 -ReviewBackups                     # list backup records, no restore
 
   Safety:
     - All changes are backed up (Backups\) and restore scripts (Restore-*.ps1) exist.
@@ -300,8 +463,8 @@ function Show-WCSActionMenu {
     Write-Host '  [1] Run debloat preview (no changes)' -ForegroundColor Cyan
     Write-Host '  [2] Apply debloat (requires Administrator)' -ForegroundColor Cyan
     Write-Host '  [3] Run updates (winget/choco) + re-debloat afterwards' -ForegroundColor Cyan
-    Write-Host '  [4] Schedule auto re-run (weekly)' -ForegroundColor Cyan
-    Write-Host '  [5] Revert / restore backups (Tools\Restore-WCSBackup.ps1)' -ForegroundColor Cyan
+    Write-Host '  [4] Schedule auto re-run (days from AutoReRunDays pref; 0 = unregister)' -ForegroundColor Cyan
+    Write-Host '  [5] Review backup records, then restore (Tools\Review-WCSBackup.ps1)' -ForegroundColor Cyan
     Write-Host '  [6] Run audits (state / installed software)' -ForegroundColor Cyan
     Write-Host '  [h] Help' -ForegroundColor Cyan
     Write-Host '  [0] Exit' -ForegroundColor Cyan
@@ -309,19 +472,19 @@ function Show-WCSActionMenu {
 }
 
 function Invoke-WCSActionMenu {
-    param([string]$LevelKey, [string[]]$Topics, [switch]$AllowRisky)
+    param([string]$LevelKey, [string[]]$Topics, [switch]$AllowRisky, [switch]$Quick, [switch]$NoParallel, [int]$MaxParallel = 4)
 
     while ($true) {
         $choice = Show-WCSActionMenu
         switch ($choice) {
             '1' {
                 Show-WCSPlan -LevelKey $LevelKey -Topics $Topics
-                Invoke-WCSTopicCleanups -LevelKey $LevelKey -Topics $Topics -AllowRisky:$AllowRisky
+                Invoke-WCSTopicCleanups -LevelKey $LevelKey -Topics $Topics -AllowRisky:$AllowRisky -Quick:$Quick -NoParallel:$NoParallel -MaxParallel $MaxParallel
             }
             '2' {
                 Show-WCSPlan -LevelKey $LevelKey -Topics $Topics
                 New-WCSRestorePoint
-                Invoke-WCSTopicCleanups -LevelKey $LevelKey -Topics $Topics -Apply -AllowRisky:$AllowRisky
+                Invoke-WCSTopicCleanups -LevelKey $LevelKey -Topics $Topics -Apply -AllowRisky:$AllowRisky -NoParallel -MaxParallel $MaxParallel
                 Write-Host '  Done. Backups are in Backups\ and restore scripts exist for rollback.' -ForegroundColor Green
             }
             '3' {
@@ -333,11 +496,18 @@ function Invoke-WCSActionMenu {
                 }
             }
             '4' {
-                Register-WCSReRunTask -Days 7
+                $prefs = Read-WCSPreferences
+                $defaultDays = if ($prefs -and $prefs.AutoReRunDays) { [int]$prefs.AutoReRunDays } else { 7 }
+                $ans = Get-WCSMenuInput -Prompt "Days between automatic re-runs [$defaultDays] - 0 unregisters, q cancels"
+                if ($null -eq $ans -or $ans -in @('q', 'quit')) { }
+                elseif ($ans -eq '') { Register-WCSReRunTask -Days $defaultDays }
+                elseif ($ans -match '^\d+$') { Register-WCSReRunTask -Days ([int]$ans) }
+                else { Write-Host '  Invalid input - enter a number of days (0 = unregister).' -ForegroundColor Yellow }
             }
             '5' {
-                $toolPath = Join-Path (Get-SuiteRoot) 'Tools\Restore-WCSBackup.ps1'
-                if (Test-Path $toolPath) { & $toolPath -Backups } else { Write-Warning "  Missing: Tools\Restore-WCSBackup.ps1" }
+                # Review backup records first, then offer the restore (Tools\Review-WCSBackup.ps1).
+                $reviewTool = Join-Path (Get-SuiteRoot) 'Tools\Review-WCSBackup.ps1'
+                if (Test-Path $reviewTool) { & $reviewTool } else { Write-Warning "  Missing: $reviewTool" }
             }
             '6' {
                 foreach ($script in @('Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1')) {
@@ -363,6 +533,24 @@ function Invoke-WCSActionMenu {
 Write-WCSMenuHeader 'WindowsCleanupSuite' 'Debloat & accelerate your Windows - Levels + Topics, everything reversible.'
 if (-not (Test-SuiteIsAdmin)) {
     Write-Host '  Note: changes need Administrator; preview mode works without it.' -ForegroundColor DarkGray
+}
+
+if ($Apply -and $Quick) {
+    Write-Error '  -Quick is a preview-only fast mode and cannot be combined with -Apply.'
+    exit 1
+}
+
+# Non-interactive scheduled re-run management: -ScheduleDays N registers, 0 unregisters, -1 = AutoReRunDays pref.
+if ($PSBoundParameters.ContainsKey('ScheduleDays')) {
+    if (Register-WCSReRunTask -Days $ScheduleDays) { exit 0 } else { exit 1 }
+}
+
+# Non-interactive backup review: list all records, no restore.
+if ($ReviewBackups) {
+    $reviewTool = Join-Path (Get-SuiteRoot) 'Tools\Review-WCSBackup.ps1'
+    if (-not (Test-Path $reviewTool)) { Write-Error "  Missing: $reviewTool"; exit 1 }
+    & $reviewTool -List
+    if ($LASTEXITCODE -eq 0) { exit 0 } else { exit 1 }
 }
 
 # Determine LevelKey
@@ -403,7 +591,10 @@ if ($NonInteractive) {
         if ($prefs -and $prefs.Topics) { @($prefs.Topics) } else { $default }
     }
 
-    Write-WCSMenuHeader 'Non-interactive run' "Level: $((Get-WCSLevelByKey $levelKey).Label), Topics: $($topicNames -join ', '), Mode: $(if ($Apply) { 'APPLY' } else { 'PREVIEW' })"
+    $modeText = if ($Apply) { 'APPLY' } else { 'PREVIEW' }
+    if ($Quick) { $modeText += ' +quick' }
+    if (-not $Apply -and -not $NoParallel) { $modeText += ' +parallel' }
+    Write-WCSMenuHeader 'Non-interactive run' "Level: $((Get-WCSLevelByKey $levelKey).Label), Topics: $($topicNames -join ', '), Mode: $modeText"
 
     if ($Apply) {
         if (-not (Test-SuiteIsAdmin)) {
@@ -411,10 +602,10 @@ if ($NonInteractive) {
             exit 1
         }
         New-WCSRestorePoint
-        Invoke-WCSTopicCleanups -LevelKey $levelKey -Topics $topicNames -Apply -AllowRisky:$AllowRisky
+        Invoke-WCSTopicCleanups -LevelKey $levelKey -Topics $topicNames -Apply -AllowRisky:$AllowRisky -NoParallel -MaxParallel $MaxParallel
         Write-Host '  Done.' -ForegroundColor Green
     } else {
-        Invoke-WCSTopicCleanups -LevelKey $levelKey -Topics $topicNames -AllowRisky:$AllowRisky
+        Invoke-WCSTopicCleanups -LevelKey $levelKey -Topics $topicNames -AllowRisky:$AllowRisky -Quick:$Quick -NoParallel:$NoParallel -MaxParallel $MaxParallel
         Write-Host '  Preview done - nothing was modified (use -Apply to change state).' -ForegroundColor Gray
     }
 
@@ -437,10 +628,10 @@ else {
         }
         Show-WCSPlan -LevelKey $levelKey -Topics $topicNames
         New-WCSRestorePoint
-        Invoke-WCSTopicCleanups -LevelKey $levelKey -Topics $topicNames -Apply -AllowRisky:$AllowRisky
+        Invoke-WCSTopicCleanups -LevelKey $levelKey -Topics $topicNames -Apply -AllowRisky:$AllowRisky -NoParallel -MaxParallel $MaxParallel
         Write-Host '  Done. Backups are in Backups\ and restore scripts exist for rollback.' -ForegroundColor Green
     } else {
-        Invoke-WCSActionMenu -LevelKey $levelKey -Topics $topicNames -AllowRisky:$AllowRisky
+        Invoke-WCSActionMenu -LevelKey $levelKey -Topics $topicNames -AllowRisky:$AllowRisky -Quick:$Quick -NoParallel:$NoParallel -MaxParallel $MaxParallel
     }
 
     if ($SavePreferences) { Save-WCSPreferences -LevelKey $levelKey -TopicNames $topicNames }

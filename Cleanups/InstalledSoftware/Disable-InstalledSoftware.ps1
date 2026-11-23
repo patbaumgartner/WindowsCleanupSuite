@@ -16,11 +16,17 @@
 .PARAMETER WhatIf
     Preview mode - shows what would change without touching the system.
 
+.PARAMETER Quick
+    Fast preview: enumerates the Uninstall keys once (single pass) instead of once per
+    manifest entry, and skips the full provisioned-package scan.
+
 .EXAMPLE
     & 'WindowsCleanupSuite\Cleanups\InstalledSoftware\Disable-InstalledSoftware.ps1' -WhatIf
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
-param()
+param(
+    [switch]$Quick
+)
 
 . (Join-Path $PSScriptRoot '..\..\Core\CleanupEngine.ps1')
 
@@ -31,6 +37,30 @@ $backupRoot = Get-SuiteBackupRoot -CleanupName 'InstalledSoftware'
 Write-Host 'Installed-software cleanup (Win32 apps)'
 $uninstallKeys = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall')
 
+# Single-pass index of every Uninstall entry: enumerating the subkeys once and matching
+# in memory is O(total entries) instead of O(manifest entries x total entries).
+$script:uninstallIndex = $null
+function Get-SuiteUninstallIndex {
+    if ($null -ne $script:uninstallIndex) { return $script:uninstallIndex }
+    $idx = @()
+    foreach ($keyPath in $uninstallKeys) {
+        if (-not (Test-Path $keyPath)) { continue }
+        foreach ($subKey in @(Get-ChildItem $keyPath -ErrorAction SilentlyContinue)) {
+            try { $ip = Get-ItemProperty -Path $subKey.PSPath -ErrorAction Stop } catch { continue }
+            $idx += [pscustomobject]@{
+                DisplayName     = if ($ip.PSObject.Properties.Name -contains 'DisplayName') { [string]$ip.DisplayName } else { '' }
+                Publisher       = if ($ip.PSObject.Properties.Name -contains 'Publisher') { [string]$ip.Publisher } else { '' }
+                HasPublisher    = [bool]($ip.PSObject.Properties.Name -contains 'Publisher')
+                UninstallString = if ($ip.PSObject.Properties.Name -contains 'UninstallString') { [string]$ip.UninstallString } else { '' }
+                RegKeyPath      = $subKey.PSPath
+                AllValues       = $ip
+            }
+        }
+    }
+    $script:uninstallIndex = $idx
+    return $idx
+}
+
 foreach ($entry in @($manifest.Win32Apps)) {
     if ($entry.Kept) { Write-Host "  Kept by user request: $($entry.Name)"; continue }
     if (-not $PSCmdlet.ShouldProcess($entry.Name, "Remove Win32 app via uninstaller")) {
@@ -39,17 +69,14 @@ foreach ($entry in @($manifest.Win32Apps)) {
     }
 
     $found = $false
-    foreach ($keyPath in $uninstallKeys) {
-        if (-not (Test-Path $keyPath)) { continue }
-        foreach ($subKey in @(Get-ChildItem $keyPath -ErrorAction SilentlyContinue)) {
-            try { $ip = Get-ItemProperty -Path $subKey.PSPath -ErrorAction Stop } catch { continue }
-            $displayName = if ($ip.PSObject.Properties.Name -contains 'DisplayName') { [string]$ip.DisplayName } else { '' }
-            if ($displayName -ne $entry.Name) { continue }
-            if ($entry.Publisher -and $ip.PSObject.Properties.Name -contains 'Publisher' -and [string]$ip.Publisher -notlike $entry.Publisher) {
-                Write-Host "  Publisher mismatch for '$displayName' ('$($ip.Publisher)' vs '$($entry.Publisher)'), skipping"
-                continue
-            }
-            if ($ip.PSObject.Properties.Name -contains 'UninstallString' -and $ip.UninstallString) {
+    foreach ($app in @(Get-SuiteUninstallIndex | Where-Object { $_.DisplayName -eq $entry.Name })) {
+        if ($entry.Publisher -and $app.HasPublisher -and $app.Publisher -notlike $entry.Publisher) {
+            Write-Host "  Publisher mismatch for '$($app.DisplayName)' ('$($app.Publisher)' vs '$($entry.Publisher)'), skipping"
+            continue
+        }
+        if ($app.UninstallString) {
+            $ip = $app.AllValues
+            $displayName = $app.DisplayName
                 $values = @($ip.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object {
                     @{
                         Name = $_.Name
@@ -59,14 +86,14 @@ foreach ($entry in @($manifest.Win32Apps)) {
                 })
                 $record = @{
                     Type = 'Win32'; Name = $displayName
-                    Publisher = if ($ip.PSObject.Properties.Name -contains 'Publisher') { [string]$ip.Publisher } else { '' }
-                    UninstallString = [string]$ip.UninstallString
-                    RegKeyPath = $subKey.PSPath
+                    Publisher = $app.Publisher
+                    UninstallString = $app.UninstallString
+                    RegKeyPath = $app.RegKeyPath
                     Values = $values
                 }
                 New-SuiteBackupFile -BackupRoot $backupRoot -FileName "win32_$(Get-SuiteSafeFileName $displayName).json" -Record $record
                 try {
-                    $proc = Start-Process -FilePath cmd.exe -ArgumentList '/c', $ip.UninstallString -Wait -PassThru -ErrorAction SilentlyContinue
+                    $proc = Start-Process -FilePath cmd.exe -ArgumentList '/c', $app.UninstallString -Wait -PassThru -ErrorAction SilentlyContinue
                 } catch {
                     Write-Warning "  Could not start uninstaller for '$displayName': $($_.Exception.Message) (backup kept in $backupRoot)"
                     $proc = $null
@@ -78,9 +105,8 @@ foreach ($entry in @($manifest.Win32Apps)) {
                     Write-Warning "  Uninstaller for '$displayName' exited with code $exitCode (failed or cancelled) - backup kept in $backupRoot"
                 }
                 $found = $true
-            } else {
-                Write-Warning "  No uninstaller string for '$displayName' - skipping"
-            }
+        } else {
+            Write-Warning "  No uninstaller string for '$($app.DisplayName)' - skipping"
         }
     }
     if (-not $found) { Write-Host "  Win32 app not installed or no uninstaller: $($entry.Name)" }
@@ -132,6 +158,7 @@ foreach ($entry in @($manifest.UwpApps)) {
 
     # Provisioned packages (what Windows pre-installs) - only available elevated
     if (-not $canAllUsers) { continue }
+    if ($Quick) { Write-Host "  Provisioned-package full scan skipped (-Quick): $pattern"; continue }
     try {
         foreach ($pkg in @(Get-AppxProvisionedPackage -Online -AllUsers -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like $pattern })) {
             $record = @{ Type = 'UwpProvisioned'; DisplayName = $pkg.DisplayName; PublisherId = $pkg.PublisherId; Architecture = $pkg.Architecture }

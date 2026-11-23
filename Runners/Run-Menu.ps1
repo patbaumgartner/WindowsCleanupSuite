@@ -17,7 +17,12 @@ param(
     [switch]$AutoApprove,
     [switch]$NonInteractive,
     [switch]$SavePreferences,
-    [switch]$AllowRisky
+    [switch]$AllowRisky,
+    [switch]$Quick,
+    [switch]$NoParallel,
+    [int]$MaxParallel = 4,
+    [int]$ScheduleDays = -1,
+    [switch]$ReviewBackups
 )
 
 $MenuPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'Core\WCS.Menu.ps1'

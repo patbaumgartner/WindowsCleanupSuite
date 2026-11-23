@@ -472,6 +472,88 @@ function Set-WCSRegistryEntry {
     }
 }
 
+function Get-SuiteBackupReview {
+    <#
+        Enumerates Backups\<Cleanup>\** and returns one review row per backup record:
+        Cleanup, File (relative to BackupRoot), Type, Name, Detail (one-liner).
+        Used by Tools\Review-WCSBackup.ps1 to show what a restore would undo.
+    #>
+    param(
+        [string]$BackupRoot = '',
+        [string]$Cleanup = ''    # optional: only this cleanup subfolder
+    )
+    if ([string]::IsNullOrWhiteSpace($BackupRoot)) { $BackupRoot = Join-Path (Get-SuiteRoot) 'Backups' }
+    $rows = @()
+    if (-not (Test-Path -LiteralPath $BackupRoot)) { return $rows }
+
+    $dirs = @(Get-ChildItem -Path $BackupRoot -Directory -ErrorAction SilentlyContinue)
+    if ($Cleanup) { $dirs = @($dirs | Where-Object { $_.Name -eq $Cleanup }) }
+
+    foreach ($dir in $dirs) {
+        $files = @(Get-ChildItem -Path $dir.FullName -Recurse -File -Include '*.json', '*.txt' -ErrorAction SilentlyContinue)
+        foreach ($file in $files) {
+            $content = $null
+            try { $content = Get-Content -Raw -LiteralPath $file.FullName -ErrorAction Stop } catch { continue }
+            if ([string]::IsNullOrWhiteSpace($content)) { continue }
+            $records = $null
+            try { $records = @(ConvertFrom-Json -InputObject $content -ErrorAction Stop) } catch { continue }
+
+            foreach ($rec in $records) {
+                if ($null -eq $rec) { continue }
+                $props = @($rec.PSObject.Properties.Name)
+                $type = if ($props -contains 'Type' -and $rec.Type) { [string]$rec.Type } else { 'Unknown' }
+
+                $name = ''
+                foreach ($cand in @('Name', 'DisplayName', 'TaskName')) {
+                    if ($props -contains $cand -and $rec.$cand) { $name = [string]$rec.$cand; break }
+                }
+                $path = ''
+                if ($props -contains 'Path' -and $rec.Path) { $path = [string]$rec.Path }
+                elseif ($props -contains 'RegistryKey' -and $rec.RegistryKey) { $path = [string]$rec.RegistryKey }
+                elseif ($props -contains 'TaskPath' -and $rec.TaskPath) { $path = [string]$rec.TaskPath }
+                $reason = if ($props -contains 'Reason') { [string]$rec.Reason } else { '' }
+
+                $detail = switch ($type) {
+                    'Registry' {
+                        $old = '<absent>'
+                        if ($props -contains 'OldExists' -and $rec.OldExists) { $old = "$($rec.OldValue)" }
+                        elseif ($props -contains 'HadPrevious' -and $rec.HadPrevious) { $old = "$($rec.PreviousValue)" }
+                        $new = ''
+                        if ($props -contains 'NewValue') { $new = "$($rec.NewValue)" }
+                        elseif ($props -contains 'Value') { $new = "$($rec.Value)" }
+                        "$path\$name : $old -> $new"
+                    }
+                    'Service'    { "$name : StartType=$($rec.StartType)" }
+                    'Task'       { "$path\$name : State=$($rec.State) Enabled=$($rec.Enabled)" }
+                    'Win32'      { "$name : uninstall string recorded" }
+                    'UwpRemoved' { "$name : $($rec.PackageFullName) ($($rec.Scope))" }
+                    'UwpProvisioned' { "$name (provisioned package)" }
+                    'StartupApproved' { "$path\$name" }
+                    'AppModelStartup' { "$path\$name : State=$($rec.State)" }
+                    { $_ -in @('RunAutorun', 'RunEntry') } { "$path\$name : $($rec.Value)" }
+                    default      { if ($reason) { $reason } else { $name } }
+                }
+
+                $rel = $file.FullName
+                if ($rel.StartsWith($BackupRoot, [StringComparison]::OrdinalIgnoreCase)) {
+                    $rel = $rel.Substring($BackupRoot.Length).TrimStart('\', '/')
+                } else {
+                    $rel = Split-Path -Leaf $file.FullName
+                }
+
+                $rows += [pscustomobject]@{
+                    Cleanup = $dir.Name
+                    File    = $rel
+                    Type    = $type
+                    Name    = $name
+                    Detail  = $detail
+                }
+            }
+        }
+    }
+    return $rows
+}
+
 function Restore-WCSRegistryRecordValue {
     <#
         Restores a registry value from a backup record produced by Set-WCSRegistryEntry
