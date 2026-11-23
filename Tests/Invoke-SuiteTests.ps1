@@ -238,7 +238,7 @@ foreach ($rel in @(
     'Audit\Audit-State.ps1', 'Audit\Audit-InstalledSoftware.ps1', 'Audit\Audit-RunningServices.ps1', 'Audit\Check-SystemHealth.ps1', 'Audit\Perf-Snapshot.ps1',
     'Tests\Invoke-SuiteTests.ps1', 'Tests\Invoke-PS51ParseCheck.ps1',
     'Core\CleanupEngine.ps1', 'Core\WCS.Catalog.ps1', 'Core\WCS.Menu.ps1', 'Core\WCS.Updates.ps1', 'Core\WCS.Scheduler.ps1',
-    'Tools\Restore-WCSBackup.ps1', 'Tools\New-WCSZip.ps1', 'Launcher.ps1',
+    'Tools\Restore-WCSBackup.ps1', 'Tools\Review-WCSBackup.ps1', 'Tools\New-WCSZip.ps1', 'Launcher.ps1',
     'LICENSE', 'CHANGELOG.md', 'VERSION', 'README.md'
 )) {
     Test-SuiteCheck -Name "File exists: $rel" -Pass (Test-Path (Join-Path $SuiteRoot $rel))
@@ -422,6 +422,114 @@ foreach ($ref in $previousProjectRefs) {
     }
     Test-SuiteCheck -Name "No references to previous project ('$ref')" -Pass ($hits.Count -eq 0)
 }
+
+# --- 9. Feature tests: parallel preview, -Quick mode, scheduler, backup review --------
+# 9a. Menu wiring: new switches exist and are forwarded -------------------------------
+Test-SuiteCheck -Name 'Menu: param block has -Quick/-NoParallel/-MaxParallel/-ScheduleDays/-ReviewBackups' -Pass (
+    $menuText -match '\[switch\]\$Quick' -and
+    $menuText -match '\[switch\]\$NoParallel' -and
+    $menuText -match '\[int\]\$MaxParallel = 4' -and
+    $menuText -match '\[int\]\$ScheduleDays = -1' -and
+    $menuText -match '\[switch\]\$ReviewBackups')
+Test-SuiteCheck -Name 'Menu: -Apply + -Quick is rejected with exit 1 (quick is preview-only)' -Pass (
+    $menuText -match 'if \(\$Apply -and \$Quick\)' -and
+    $menuText -match 'preview-only fast mode and cannot be combined with -Apply')
+Test-SuiteCheck -Name 'Menu: preview runs in a runspace pool; -Apply/-NoParallel/single job stay sequential' -Pass (
+    $menuText -match '\[runspacefactory\]::CreateRunspacePool' -and
+    $menuText -match 'if \(\$Apply -or \$NoParallel -or \$jobs\.Count -eq 1\)' -and
+    $menuText -match 'Invoke-WCSParallelCleanups')
+Test-SuiteCheck -Name 'Menu: -Quick forwarded only to the heavy scanners via Get-WCSCleanupJobArgs' -Pass (
+    $menuText -match 'function Get-WCSCleanupJobArgs' -and
+    (@([regex]::Matches($menuText, "jobArgs\['Quick'\] = \$true")).Count -ge 2) -and
+    $menuText -match 'Disable-ServicesAndTasks\.ps1' -and
+    $menuText -match 'Disable-InstalledSoftware\.ps1' -and
+    $menuText -match 'Disable-TempAndJunkFiles\.ps1')
+Test-SuiteCheck -Name 'Menu: Save-WCSPreferences preserves an existing AutoReRunDays' -Pass (
+    $menuText -match '\$existing = Read-WCSPreferences' -and
+    $menuText -match 'AutoReRunDays = \$autoDays')
+Test-SuiteCheck -Name 'Menu: action 4 schedules from AutoReRunDays pref (0 = unregister), action 5 runs review tool' -Pass (
+    $menuText -match "Register-WCSReRunTask -Days \(\[int\]\$ans\)" -and
+    $menuText -match "Register-WCSReRunTask -Days \$defaultDays" -and
+    $menuText -match 'Tools\\Review-WCSBackup\.ps1')
+Test-SuiteCheck -Name 'Runner: Run-Menu.ps1 forwards the new switches' -Pass (
+    (Get-Content -Raw (Join-Path $SuiteRoot 'Runners\Run-Menu.ps1') -ErrorAction SilentlyContinue) -match '\[switch\]\$Quick' -and
+    (Get-Content -Raw (Join-Path $SuiteRoot 'Runners\Run-Menu.ps1') -ErrorAction SilentlyContinue) -match '\[int\]\$ScheduleDays = -1' -and
+    (Get-Content -Raw (Join-Path $SuiteRoot 'Runners\Run-Menu.ps1') -ErrorAction SilentlyContinue) -match '\[switch\]\$ReviewBackups')
+
+# 9b. -Quick on the heavy cleanup scripts ---------------------------------------------
+$quickScripts = @(
+    'Cleanups\InstalledSoftware\Disable-InstalledSoftware.ps1',
+    'Cleanups\TempAndJunkFiles\Disable-TempAndJunkFiles.ps1',
+    'Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1'
+)
+foreach ($rel in $quickScripts) {
+    $t = Get-Content -Raw -Path (Join-Path $SuiteRoot $rel) -ErrorAction SilentlyContinue
+    Test-SuiteCheck -Name "Quick: $rel declares [switch]\$Quick" -Pass ($t -match '\[switch\]\$Quick')
+}
+$instText = Get-Content -Raw -Path (Join-Path $SuiteRoot $quickScripts[0]) -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Quick: InstalledSoftware builds a single-pass Uninstall index and skips the provisioned scan' -Pass (
+    $instText -match 'function Get-SuiteUninstallIndex' -and
+    $instText -match 'Provisioned-package full scan skipped \(-Quick\)')
+$tjText = Get-Content -Raw -Path (Join-Path $SuiteRoot $quickScripts[1]) -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Quick: TempAndJunkFiles skips the recursive FilePatterns scan in -Quick mode' -Pass (
+    $tjText -match 'if \(\$Quick\)' -and
+    $tjText -match 'Get-ChildItem -Path \$resolved -Include \$pattern -Recurse')
+$wsText = Get-Content -Raw -Path (Join-Path $SuiteRoot $quickScripts[2]) -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Quick: ServicesAndTasks probes exact names directly and skips the OneDrive pattern scan' -Pass (
+    $wsText -match 'Get-Service -Name \$Entry\.Name' -and
+    $wsText -match 'Get-ScheduledTask -TaskName \$Entry\.Name -TaskPath \$Entry\.Path' -and
+    $wsText -match 'Skipped OneDrive pattern scan \(-Quick\)')
+
+# 9c. Scheduler: AutoReRunDays integration (WhatIf paths are safe non-admin) -----------
+. (Join-Path $SuiteRoot 'Core\WCS.Scheduler.ps1')
+Test-SuiteCheck -Name 'Scheduler: task name is WindowsCleanupSuite_ReRun' -Pass ($WCS_ReRunTaskName -eq 'WindowsCleanupSuite_ReRun')
+# NOTE: -Prefs $null makes the functions read the real Config\UserPreferences.json
+# (git-ignored, machine-dependent) - pass an empty object to test the deterministic fallback.
+Test-SuiteCheck -Name 'Scheduler: -Days -1 resolves AutoReRunDays pref, fallback 7; explicit days pass through' -Pass (
+    ((Get-WCSReRunDays -Days -1 -Prefs ([pscustomobject]@{ AutoReRunDays = 3 })) -eq 3) -and
+    ((Get-WCSReRunDays -Days -1 -Prefs ([pscustomobject]@{})) -eq 7) -and
+    ((Get-WCSReRunDays -Days 5) -eq 5))
+Test-SuiteCheck -Name 'Scheduler: task command line honors stored Level/Topics (fallback -Level 4)' -Pass (
+    ((Get-WCSReRunActionArguments -Prefs ([pscustomobject]@{})) -match '-Level 4') -and
+    ((Get-WCSReRunActionArguments -Prefs ([pscustomobject]@{ Level = '2'; Topics = @('ServicesTasks', 'PrivacySettings') })) -match '-Level 2') -and
+    ((Get-WCSReRunActionArguments -Prefs ([pscustomobject]@{ Level = '2'; Topics = @('ServicesTasks', 'PrivacySettings') })) -match 'ServicesTasks,PrivacySettings'))
+Test-SuiteCheck -Name 'Scheduler: -WhatIf register/unregister previews return $true without touching the system' -Pass (
+    (Register-WCSReRunTask -Days 3 -WhatIf) -eq $true -and
+    (Register-WCSReRunTask -Days 0 -WhatIf) -eq $true)
+$schedText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Core\WCS.Scheduler.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Scheduler: registers as SYSTEM, admin-gated, -Days range -1..365, reads AutoReRunDays' -Pass (
+    $schedText -match 'ValidateRange\(-1, 365\)' -and
+    $schedText -match "-User 'SYSTEM'" -and
+    $schedText -match 'Test-WCSIsAdmin' -and
+    $schedText -match 'AutoReRunDays' -and
+    $schedText -match 'if \(\$Days -eq 0\)')
+
+# 9d. Backup review tool ---------------------------------------------------------------
+$reviewText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Tools\Review-WCSBackup.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Review: tool has -List/-Cleanup/-Restore, uses Get-SuiteBackupReview, admin-gates restore' -Pass (
+    $reviewText -match '\[switch\]\$List' -and
+    $reviewText -match '\[string\]\$Cleanup' -and
+    $reviewText -match '\[switch\]\$Restore' -and
+    $reviewText -match 'Get-SuiteBackupReview' -and
+    $reviewText -match 'Test-SuiteIsAdmin' -and
+    $reviewText -match 'Restore-WCSBackup\.ps1')
+Test-SuiteCheck -Name 'Engine: Get-SuiteBackupReview enumerates Backups records' -Pass (
+    $engineText -match 'function Get-SuiteBackupReview')
+
+# 9e. Smoke: new CLI surfaces exit cleanly ----------------------------------------------
+Write-Host 'Running feature smokes (-ReviewBackups, -Apply -Quick reject, -Quick preview)...'
+$revOut = & $menuScript -ReviewBackups *>&1
+Test-SuiteCheck -Name 'Smoke: Run-Menu -ReviewBackups exits 0 (lists records, no restore)' -Pass ($LASTEXITCODE -eq 0)
+
+$null = & $menuScript -NonInteractive -Level 2 -Apply -Quick *>&1
+Test-SuiteCheck -Name 'Smoke: -Apply + -Quick exits 1 immediately' -Pass ($LASTEXITCODE -eq 1)
+
+$quickOut = & $menuScript -NonInteractive -Level 2 -Topics 'ServicesTasks' -Quick *>&1
+$quickExit = $LASTEXITCODE
+$quickPlain = (($quickOut | Out-String) -replace '\x1b\[[0-9;]*m', '')
+Test-SuiteCheck -Name 'Smoke: -NonInteractive -Level 2 -Topics ServicesTasks -Quick preview exits 0' -Pass ($quickExit -eq 0)
+Test-SuiteCheck -Name 'Smoke: quick preview header shows +quick and +parallel modes' -Pass (
+    $quickPlain -match '\+quick' -and $quickPlain -match '\+parallel')
 
 Write-Host ''
 Write-Host "Results: $($script:Passed) passed, $($script:Failed) failed"
