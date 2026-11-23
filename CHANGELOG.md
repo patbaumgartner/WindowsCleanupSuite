@@ -16,6 +16,34 @@ project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 
 
 ## [Unreleased]
 
+### Added
+- **Parallel previews** — in preview mode (`-WhatIf`) the topic scans now run concurrently in a
+  Windows PowerShell 5.1-compatible runspace pool instead of one-after-another. Escape hatches:
+  `-NoParallel` (force sequential) and `-MaxParallel <n>` (default 4). Apply mode (`-Apply`) always
+  stays sequential and single-job runs fall back to sequential automatically. Measured on the dev
+  machine (Win 11, non-admin): full Level 2 preview exits 0 in **~166s vs ~476s sequential**
+  (~2.9x faster). Header line shows `Mode: PREVIEW +parallel`.
+- **`-Quick` topic-only fast preview** — preview-only switch (`-Apply -Quick` is rejected with
+  exit 1) threaded into the three heaviest cleanups: `InstalledSoftware` builds a single-pass
+  uninstall index and skips the provisioned-package scan, `TempAndJunkFiles` skips the recursive
+  FilePatterns scan, `ServicesAndTasks` probes exact service/task names directly and skips the
+  OneDrive pattern scan. Header line shows `+quick`.
+- **Scheduled re-runs honor the `AutoReRunDays` preference** — `Register-WCSReRunTask -Days -1`
+  resolves `AutoReRunDays` from `Config\UserPreferences.json` (fallback 7), `-Days 0` unregisters
+  `WindowsCleanupSuite_ReRun`, N>=1 registers it (as SYSTEM, admin-gated, `-WhatIf`-previewable).
+  The task command line is built from the stored Level/Topics preferences (fallback
+  `-NonInteractive -Level 4 -Apply -AutoApprove`). Wired into menu action 4 (prompt defaults to
+  the pref) and the new `-ScheduleDays` CLI switch; `Save-WCSPreferences` preserves an existing
+  `AutoReRunDays` value.
+- **Interactive backup review before restore** — new `Tools\Review-WCSBackup.ps1`
+  (`-List` non-interactive listing, interactive picker, optional admin-gated restore at the end)
+  backed by the new engine helper `Get-SuiteBackupReview` in `Core\CleanupEngine.ps1`. Wired into
+  menu action 5 and the new `-ReviewBackups` CLI switch. Verified: `-ReviewBackups` lists all
+  backup records and exits 0.
+- **Tests** — `Tests\Invoke-SuiteTests.ps1` section 9 covers the parallel runner (runspace pool,
+  fallbacks), `-Quick` dispatch and per-cleanup quick paths, the scheduler (`AutoReRunDays`
+  resolution, task command line, `-WhatIf` register/unregister, admin gate) and the review tool.
+
 ### Fixed
 - **Apply mode crashed with `The term 'if' is not recognized`** in every cleanup using
   `Set-WCSRegistryEntry` (PrivacySettings, WindowsUpdates, PowerPlan): the backup record used

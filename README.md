@@ -48,7 +48,7 @@ Walk through:
 2. **Choose Topics** — toggle the areas you want (spaces/numbers/[a]ll/[n]one, Enter to accept).
 3. **Preview** — see what would change (WhatIf).
 4. **Apply** — System Restore point is created, then changes are applied (needs Admin).
-5. **Actions menu** — preview / apply / updates+re-debloat / schedule re-run / revert / audits / help / exit.
+5. **Actions menu** — `[1]` preview / `[2]` apply / `[3]` updates+re-debloat / `[4]` schedule re-run / `[5]` review backup records then restore / `[6]` audits / `[h]` help / `[0]` exit.
 
 Everything is colored, numbered and stable — invalid input is retried instead of crashing.
 
@@ -89,9 +89,30 @@ Perfect for scripts/CI:
 # Risky items (Network: NetBIOS off, static DNS):
 & 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -NonInteractive -Level 2 -Topics 'Network' -AllowRisky
 
+# Fast topic-only preview (-Quick is preview-only; -Apply -Quick exits 1):
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -NonInteractive -Level 2 -Quick
+
+# Parallel preview (default) vs sequential escape hatches:
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -NonInteractive -Level 2                    # topics scan in parallel (max 4)
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -NonInteractive -Level 2 -NoParallel        # force sequential
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -NonInteractive -Level 2 -MaxParallel 2     # custom pool size
+
+# Schedule the automatic re-run (uses the AutoReRunDays pref; 0 = unregister; needs Admin):
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -ScheduleDays -1
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -ScheduleDays 7
+
+# Review backup records before restoring (non-interactive listing):
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -ReviewBackups
+
 # Unified restore (restores Backups\ records; preview unless -Apply):
 & 'WindowsCleanupSuite\Tools\Restore-WCSBackup.ps1' -Backups
 ```
+
+**Performance switches:** previews run the topic scans in parallel (PS 5.1 runspace pool,
+`-MaxParallel` default 4; `-NoParallel` forces the old sequential order; `-Apply` is always
+sequential). `-Quick` makes the three heaviest topics (InstalledSoftware, TempAndJunkFiles,
+ServicesAndTasks) topic-only: single-pass uninstall index, no recursive junk-file scan, exact
+service/task probes. A full Level 2 preview takes ~2.8 min parallel vs ~8 min sequential.
 
 **Topic names:** `ServicesTasks`, `PrivacySettings`, `Privacy`, `Browsers`, `Network`, `AI`,
 `OneDrive`, `ExtremeExtras`, `Maintenance`, `DNS`, `WindowsUpdates`, `PowerPlan`.
@@ -168,18 +189,42 @@ One command registers a scheduled task so the machine gets re-debloated automati
 
 ```powershell
 . 'WindowsCleanupSuite\Core\WCS.Scheduler.ps1'   # dot-source the library, then:
-Register-WCSReRunTask -Days 7 -Hour 8            # register the re-run task
+Register-WCSReRunTask -Days 7 -Hour 8            # register the re-run task (needs Admin)
+Register-WCSReRunTask -Days -1                   # use the AutoReRunDays pref from Config\UserPreferences.json (fallback 7)
+Register-WCSReRunTask -Days 0                    # = Unregister-WCSReRunTask: remove the task
+Register-WCSReRunTask -Days 3 -WhatIf            # preview what would be registered (no Admin needed)
 Unregister-WCSReRunTask                          # remove it again
 ```
 
+Or straight from the entry point / menu:
+
+```powershell
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -ScheduleDays -1   # CLI switch; -1 = stored AutoReRunDays pref
+# menu: Actions → [4] Schedule auto re-run   (prompt defaults to the AutoReRunDays pref; 0 unregisters)
+```
+
 Registered as `WindowsCleanupSuite_ReRun` (Task Scheduler → Task Scheduler Library → WindowsCleanupSuite_ReRun).
-Runs daily at 8 AM as SYSTEM, repeating every 7 days (changeable), calling `Runners\Run-Menu.ps1 -NonInteractive -Level 4 -Apply` (Extreme).
+Runs at 8 AM as SYSTEM, repeating every N days, calling `Runners\Run-Menu.ps1 -NonInteractive -Level <stored> -Apply -AutoApprove [-Topics ...]` —
+the Level/Topics come from your saved preferences (`Config\UserPreferences.json`, fallback `-Level 4` = Extreme).
+Set `"AutoReRunDays": 7` in `Config\UserPreferences.json` (or via `-SavePreferences` flow) to change the interval;
+`-Days -1` always picks it up.
 
 ---
 
 ## 🛡️ Backups & restore
 
-Every change is backed up to `Backups\` (JSON records per item). Restore everything:
+Every change is backed up to `Backups\` (JSON records per item). **Review what is backed up
+before restoring** (non-interactive listing, or interactive picker with an optional
+admin-gated restore at the end):
+
+```powershell
+& 'WindowsCleanupSuite\Tools\Review-WCSBackup.ps1' -List          # list all records + folders
+& 'WindowsCleanupSuite\Tools\Review-WCSBackup.ps1'                 # interactive picker -> optional restore
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -ReviewBackups         # same via the entry point
+# menu: Actions → [5] Review backup records, then restore
+```
+
+Restore everything:
 
 ```powershell
 & 'WindowsCleanupSuite\Tools\Restore-WCSBackup.ps1' -Backups
@@ -238,7 +283,8 @@ WindowsCleanupSuite/
 │   ├── DNSReset\                    # DNS + IP stack reset + TCP/RSS tuning
 │   └── PowerPlan\                   # Ultimate Performance + hibernate off
 ├── Tools\
-│   └── Restore-WCSBackup.ps1        # Restore backups + System Restore points
+│   ├── Restore-WCSBackup.ps1        # Restore backups + System Restore points
+│   └── Review-WCSBackup.ps1          # Review backup records (-List / interactive) before restoring
 ├── Audit\                           # State / installed software / running services / health
 │                                    # checks + Perf-Snapshot (before/after comparisons)
 ├── Tests\
@@ -258,6 +304,7 @@ WindowsCleanupSuite/
 - Validates manifest schema (entries, levels, protected patterns) for all cleanups.
 - Extends: menu-era cleanup schema checks + extension manifest checks (TempAndJunkFiles, DNSReset, PowerPlan).
 - **Menu smoke test**: runs the menu non-interactively in preview mode; exit code must be `0`.
+- **Feature coverage**: parallel preview runner (runspace pool, `-NoParallel`/`-MaxParallel` fallbacks, `-Apply` stays sequential), `-Quick` dispatch and per-cleanup quick paths, scheduler (`AutoReRunDays` resolution, task command line, `-WhatIf` paths, admin gate), backup review tool.
 - **Wiring drift checks**: the catalog maps every topic to its cleanup scripts (ServicesTasks → StartupBloat + ServicesAndTasks + InstalledSoftware), the engine run order covers all cleanups, every cleanup has a `Restore-*.ps1`, the legacy runner scripts are gone (no references anywhere in code), and `-AllowRisky` gating is present.
 - Independence check: no references to the previous project.
 
