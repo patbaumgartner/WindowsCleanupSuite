@@ -1,7 +1,7 @@
 # WindowsCleanupSuite
 
 [![Build Status](https://img.shields.io/badge/CI-passing-brightgreen.svg)](https://github.com/patbaumgartner/WindowsCleanupSuite/actions)
-[![Release](https://img.shields.io/badge/Releases-v1.2.0-brightgreen.svg)](https://github.com/patbaumgartner/WindowsCleanupSuite/releases)
+[![Release](https://img.shields.io/badge/Releases-v1.2.1-brightgreen.svg)](https://github.com/patbaumgartner/WindowsCleanupSuite/releases)
 [![PowerShell 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://learn.microsoft.com/en-us/powershell/scripting/windows-powershell/overview)
 [![Windows 10/11](https://img.shields.io/badge/Windows-10/11-blue.svg)](https://www.microsoft.com/windows)
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)

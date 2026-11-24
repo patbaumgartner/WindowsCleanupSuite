@@ -659,8 +659,18 @@ Test-SuiteCheck -Name 'Restore tool: single-owner restore (no duplicate registry
 
 # 10k. Updates + audits + zip helper hardening.
 $updatesText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Core\WCS.Updates.ps1') -ErrorAction SilentlyContinue
-Test-SuiteCheck -Name 'Updates: re-debloat forwards Topics/AllowRisky (user selection preserved)' -Pass (
-    ($updatesText -match '\[string\[\]\]\$Topics') -and ($updatesText -match '\@extraArgs'))
+Test-SuiteCheck -Name 'Updates: re-debloat forwards Topics/AllowRisky via HASHTABLE splat (array splat mis-binds MaxParallel)' -Pass (
+    ($updatesText -match '\[string\[\]\]\$Topics') -and
+    ($updatesText -match "\`$menuArgs\['Topics'\]") -and
+    ($updatesText -match '& \$menu \@menuArgs'))
+# Behavioral: the exact menu-action-3 call shape must not throw a MaxParallel binding error.
+. (Join-Path $SuiteRoot 'Core\WCS.Updates.ps1')
+$redebloatOut = Invoke-WCSDebloatAfterUpdates -Level Balanced -Topics @('PowerPlan') *>&1
+$redebloatText = ($redebloatOut | Out-String)
+Test-SuiteCheck -Name 'Updates: re-debloat with Topics binds correctly (no MaxParallel transformation error)' -Pass (
+    ($redebloatText -notmatch 'MaxParallel') -and
+    ($redebloatText -notmatch 'Cannot process argument transformation') -and
+    ($redebloatText -match 'Topics: PowerPlan'))
 $auditStateText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Audit\Audit-State.ps1') -ErrorAction SilentlyContinue
 Test-SuiteCheck -Name 'Audit-State: PathPattern compared with -like (wildcards work)' -Pass (
     $auditStateText -match '\$pathIsPattern -and \$_\.TaskPath -like \$path')

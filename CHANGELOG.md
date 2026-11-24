@@ -16,6 +16,17 @@ project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-24 - hotfix: updates + re-debloat argument binding
+
+### Fixed
+- **Menu action 3 (updates + re-debloat) crashed after updating** with
+  `Cannot process argument transformation on parameter 'MaxParallel'`:
+  `Invoke-WCSDebloatAfterUpdates` passed `-Topics <csv>` via ARRAY splatting after named
+  parameters, which binds positionally - the topic list landed on `MaxParallel` and the
+  re-debloat never ran. Now uses HASHTABLE splatting (`$menuArgs['Topics']`), so the user's
+  selected topics/risky flag bind correctly in both the preview and the `-Apply -AutoApprove`
+  paths. Regression test replays the exact action-3 call shape end-to-end.
+
 ## [1.2.0] - 2026-11-24 - parallel previews, quick mode, scheduler prefs, backup review
 
 ### Added

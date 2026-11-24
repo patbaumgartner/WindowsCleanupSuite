@@ -82,19 +82,24 @@ function Invoke-WCSDebloatAfterUpdates {
 
     $menu = Join-Path (Split-Path -Parent $PSScriptRoot) 'Runners\Run-Menu.ps1'
     if (-not (Test-Path $menu)) { Write-Error "Run-Menu.ps1 not found at $menu"; return }
-    $extraArgs = @()
-    if ($Topics -and $Topics.Count) { $extraArgs += @('-Topics', ($Topics -join ',')) }
-    if ($AllowRisky) { $extraArgs += '-AllowRisky' }
+    # HASHTABLE splatting: array splatting ('-Topics', $csv) after named parameters
+    # mis-binds positionally (the CSV lands on MaxParallel and throws). Named keys
+    # always bind to the right parameter.
+    $menuArgs = @{ NonInteractive = $true; Level = $Level }
+    if ($Topics -and $Topics.Count) { $menuArgs['Topics'] = ($Topics -join ',') }
+    if ($AllowRisky) { $menuArgs['AllowRisky'] = $true }
     Write-Host ''
     Write-Host "Re-debloating after updates (level: $Level)..." -ForegroundColor Cyan
     if ($Apply) {
         if (-not (Test-SuiteIsAdmin)) {
             Write-Warning 'Re-debloating after updates needs Administrator; running preview.'
-            & $menu -NonInteractive -Level $Level @extraArgs
+            & $menu @menuArgs
         } else {
-            & $menu -NonInteractive -Level $Level -Apply -AutoApprove @extraArgs
+            $menuArgs['Apply'] = $true
+            $menuArgs['AutoApprove'] = $true
+            & $menu @menuArgs
         }
     } else {
-        & $menu -NonInteractive -Level $Level @extraArgs
+        & $menu @menuArgs
     }
 }
