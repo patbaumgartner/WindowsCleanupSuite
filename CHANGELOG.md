@@ -9,12 +9,7 @@ All notable changes to WindowsCleanupSuite will be documented in this file.
   fetches the latest GitHub Release zip, extracts it to `%TEMP%\WindowsCleanupSuite` and launches the menu.
   (GitHub API unavailable from this sandbox - verified: curl.exe to api.github.com fails.)
 
-## [1.0.0] - 2026-11-21 (final)
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
-project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 = first publishable release).
-
-## [Unreleased]
+The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [1.2.1] - 2026-11-24 - hotfix: updates + re-debloat argument binding
 
