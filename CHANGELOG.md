@@ -3,6 +3,15 @@
 All notable changes to WindowsCleanupSuite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.2] - 2026-11-24 - per-package updates, docs refresh
+
+### Added
+- **Per-package updates** — `Invoke-WCSUpdateManager` now accepts `-PackageIds <ids[]>` to upgrade only named packages (winget `--id` per package), plus `-Force` (winget `--force`) and `-IncludeUnknown` (winget `--include-unknown`, default on the full-upgrade path). Chocolatey upgrades the named packages when IDs are given. README documents the switches with copy-paste examples.
+
+### Fixed
+- **Updates hardening test** — simplified the `PackageIds` parameter regex so the suite test also matches empty arrays (`-PackageIds=@()`).
+- **Docs** — refreshed stale menu, latency and entry-point claims in README; deduplicated 1.0.0 changelog sections, dropped the bogus Unreleased section and restored newest-first version ordering.
+
 ## [1.2.1] - 2026-11-24 - hotfix: updates + re-debloat argument binding
 
 ### Fixed
