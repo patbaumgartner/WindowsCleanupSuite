@@ -9,7 +9,7 @@
     Runners\Run-Menu.ps1
     Runners\Run-Menu.ps1 -Level 2 -Topics 'ServicesTasks,PrivacySettings' -Apply
 #>
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [string[]]$Topics,
     [string]$Level,

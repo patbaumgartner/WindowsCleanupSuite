@@ -27,8 +27,8 @@
     Preview mode - shows what would be restored without touching the system.
 
 .EXAMPLE
-    & 'Tools\Restore-WCSBackup.ps1'                        # restore all backups
-    & 'Tools\Restore-WCSBackup.ps1' -RestorePoint -Latest  # restore most recent point
+    & 'Tools\Restore-WCSBackup.ps1'                   # restore all backups
+    & 'Tools\Restore-WCSBackup.ps1' -Latest           # restore most recent restore point
     & 'Tools\Restore-WCSBackup.ps1' -RestorePoint 3 -WhatIf
 #>
 [CmdletBinding(SupportsShouldProcess = $true, DefaultParameterSetName = 'Backups')]
@@ -54,15 +54,23 @@ function Restore-WCSCustomRegistryRecords {
     $root = Join-Path $SuiteRoot 'Backups'
     if (-not (Test-Path $root)) { return }
 
+    # Single-owner rule: every cleanup folder with its own Restore-*.ps1 restores its
+    # own records (invoked below) - the generic pass only covers ORPHAN folders
+    # (legacy/removed cleanups) so no record is ever restored twice.
+    $ownedCleanups = @('StartupBloat', 'WindowsSpeedup', 'InstalledSoftware', 'WindowsAI', 'TempAndJunkFiles', 'PowerPlan', 'DNSReset', 'Privacy', 'Browsers', 'Network', 'PrivacySettings', 'WindowsUpdates', 'OneDrive', 'ExtremeExtras')
+
     # Backup records are written in two shapes (both JSON, .json or .txt):
-    #   - Invoke-SuiteRegistryEntry / Disable-WindowsAI: RegistryKey + HadPrevious + PreviousValue (+ ValueType)
+    #   - Invoke-SuiteRegistryEntry / Disable-WindowsAI: RegistryKey + HadPrevious + PreviousValue (+ PreviousType/ValueType)
     #   - Set-WCSRegistryEntry:                           Path       + OldExists   + OldValue   (+ OldType)
     # Normalize both so every Type='Registry' record is restorable here.
     foreach ($file in @(Get-ChildItem -Path $root -Recurse -File -Include '*.json', '*.txt' -ErrorAction SilentlyContinue)) {
+        $rel = $file.FullName.Substring($root.Length).TrimStart('\', '/')
+        $owner = ($rel -split '[\\/]')[0]
+        if ($ownedCleanups -contains $owner) { continue }
         $content = $null
-        try { $content = Get-Content -Raw -Path $file.FullName -ErrorAction Stop } catch { $content = $null }
+        try { $content = Get-Content -Raw -Path $file.FullName -ErrorAction Stop } catch { $global:WCS_RestoreFailed = $true; Write-Warning "  Unreadable backup file: $($file.FullName)"; continue }
         if ([string]::IsNullOrWhiteSpace($content)) { continue }
-        try { $records = @((ConvertFrom-Json $content)) } catch { continue }
+        try { $records = @((ConvertFrom-Json $content)) } catch { $global:WCS_RestoreFailed = $true; Write-Warning "  Invalid backup JSON: $($file.FullName)"; continue }
 
         foreach ($raw in @($records | Where-Object { $_.Type -eq 'Registry' -and $_.Name -and ($_.Path -or $_.RegistryKey) })) {
             $record = [ordered]@{
@@ -70,7 +78,7 @@ function Restore-WCSCustomRegistryRecords {
                 Name       = $raw.Name
                 OldExists  = if ($raw.PSObject.Properties.Name -contains 'OldExists') { [bool]$raw.OldExists } else { [bool]$raw.HadPrevious }
                 OldValue   = if ($raw.PSObject.Properties.Name -contains 'OldValue') { $raw.OldValue } else { $raw.PreviousValue }
-                OldType    = if ($raw.PSObject.Properties.Name -contains 'OldType' -and $raw.OldType) { $raw.OldType } elseif ($raw.ValueType) { $raw.ValueType } else { '' }
+                OldType    = if ($raw.PSObject.Properties.Name -contains 'OldType' -and $raw.OldType) { $raw.OldType } elseif ($raw.PSObject.Properties.Name -contains 'PreviousType' -and $raw.PreviousType) { $raw.PreviousType } elseif ($raw.ValueType) { $raw.ValueType } else { '' }
             }
 
             $names = @()
@@ -97,6 +105,7 @@ function Restore-WCSCustomRegistryRecords {
                     Write-Host "  [reg]     Skipped (already absent): $($record.Path)\$($record.Name)"
                 }
             } catch {
+                $global:WCS_RestoreFailed = $true
                 Write-Warning "  [reg]     Failed: $($record.Path)\$($record.Name) - $($_.Exception.Message)"
             }
         }
@@ -112,6 +121,10 @@ function Invoke-WCSToolRestore {
     Write-Host "--- $Tool ---"
     $LASTEXITCODE = $null
     try {
+        # -ErrorAction Stop turns a cleanup's Write-Error (real restore failure) into a
+        # terminating error caught below. Expected probes (missing service/task) do NOT
+        # Write-Error, so they cannot cause false failures; -ErrorVariable is not used
+        # because it also captures HANDLED probe errors.
         & $path -WhatIf:$WhatIfPreference -ErrorAction Stop
     } catch {
         $global:WCS_RestoreFailed = $true
@@ -173,13 +186,14 @@ if ($null -ne $RestorePoint) {
     $points = @(Get-ComputerRestorePoint | Where-Object { $_.SequenceNumber -eq $RestorePoint })
     if (-not $points.Count) { Write-Error "System Restore point #$RestorePoint not found."; exit 1 }
 
-    if (-not $WhatIf) {
+    # NOTE: the variable is $WhatIfPreference - SupportsShouldProcess does NOT create $WhatIf.
+    if (-not $WhatIfPreference) {
         $confirm = Read-Host "Restore point #$RestorePoint ($($points[0].Description))? This triggers a reboot after restoring. Type YES"
         if ($confirm -ne 'YES') { Write-Host 'Canceled.'; exit 0 }
     }
 
     if ($PSCmdlet.ShouldProcess("SequenceNumber $RestorePoint", 'Restore-Computer')) {
-        Restore-Computer -SequenceNumber $RestorePoint -ErrorAction Stop -WhatIf:$WhatIf
+        Restore-Computer -SequenceNumber $RestorePoint -ErrorAction Stop -WhatIf:$WhatIfPreference
         Write-Host "Restore initiated for point #$RestorePoint."
     }
     exit 0

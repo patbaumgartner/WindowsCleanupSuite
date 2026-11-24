@@ -23,11 +23,17 @@ param()
 . (Join-Path $PSScriptRoot '..\..\Core\CleanupEngine.ps1')
 
 $backupRoot = Get-SuiteBackupRoot -CleanupName 'InstalledSoftware'
+$isAdmin    = Test-SuiteIsAdmin
+
+if (-not $isAdmin -and -not $WhatIfPreference) {
+    Write-Warning 'Restore-InstalledSoftware: HKLM Uninstall keys require Administrator; run elevated for full effect.'
+}
 
 Write-Host 'Restoring removed Win32 apps'
 foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Object { $_.Type -eq 'Win32' })) {
     if (-not $record.RegKeyPath -or -not $record.Values) { Write-Warning "Malformed backup record: $($record.Name)"; continue }
     if (-not $PSCmdlet.ShouldProcess($record.Name, 'Restore Win32 app registry entry')) { Write-Host "  Would restore Win32 app: $($record.Name)"; continue }
+    if (-not $isAdmin -and $record.RegKeyPath -like 'HKLM:*') { Write-Host "  Skipped (Admin): $($record.Name)"; continue }
     try {
         # The uninstaller usually deletes its Uninstall key - recreate it so the
         # backed-up values can be restored.
@@ -47,7 +53,7 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Obj
         }
         Write-Host "  Restored Win32 app: $($record.Name)"
     } catch {
-        Write-Warning "  Failed to restore $($record.Name): $($_.Exception.Message)"
+        Write-Error "  Failed to restore $($record.Name): $($_.Exception.Message)"
     }
 }
 
@@ -57,4 +63,15 @@ if ($uwpRemoved.Count) {
     Write-Host "Note: $($uwpRemoved.Count) UWP app(s) were removed via Remove-AppxPackage and cannot be auto-reinstalled:"
     foreach ($u in $uwpRemoved) { Write-Host "  - $($u.Name) [$($u.Scope)]" }
     Write-Host 'To get them back, reinstall from the Microsoft Store (and re-run Windows Update for updates).'
+}
+
+$uwpProvisioned = @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Object { $_.Type -eq 'UwpProvisioned' })
+if ($uwpProvisioned.Count) {
+    Write-Host ''
+    Write-Host "Note: $($uwpProvisioned.Count) provisioned app(s) were removed from the Windows image and are NOT auto-restorable:"
+    foreach ($p in $uwpProvisioned) {
+        $pkgName = if ($p.PSObject.Properties.Name -contains 'PackageName' -and $p.PackageName) { $p.PackageName } else { $p.DisplayName }
+        Write-Host "  - $($p.DisplayName) [$pkgName]"
+    }
+    Write-Host 'To get them back, reinstall the app from the Microsoft Store; new users will then get it provisioned again.'
 }

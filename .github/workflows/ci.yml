@@ -43,6 +43,18 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File Tests\Invoke-SuiteTests.ps1
 
+      - name: Run structural tests (Windows PowerShell 5.1 runtime)
+        shell: pwsh
+        run: |
+          # Parsing alone cannot catch 5.1 RUNTIME differences - run the safe suite too.
+          $ps51 = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          if (Test-Path $ps51) {
+            & $ps51 -NoProfile -ExecutionPolicy Bypass -File Tests\Invoke-SuiteTests.ps1
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          } else {
+            Write-Host 'Windows PowerShell 5.1 not present on this runner - skipping'
+          }
+
   snapshot:
     needs: [validate]
     runs-on: windows-latest
@@ -69,5 +81,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: WindowsCleanupSuite-snapshot-${{ github.sha }}
-          path: WindowsCleanupSuite-snapshot-*.zip
+          path: |
+            WindowsCleanupSuite-snapshot-*.zip
+            WindowsCleanupSuite-snapshot-*.zip.SHA256
           retention-days: 7

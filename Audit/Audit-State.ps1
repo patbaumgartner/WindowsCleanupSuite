@@ -34,10 +34,16 @@ function Get-SuiteAuditTaskMatches {
     $matches = @()
     if ($Entry.NamePattern) {
         $path = $null
-        if ($Entry.PathPattern) { $path = $Entry.PathPattern }
+        $pathIsPattern = $false
+        if ($Entry.PathPattern) { $path = $Entry.PathPattern; $pathIsPattern = $true }
         elseif ($Entry.Path) { $path = $Entry.Path }
+        # PathPattern (e.g. '\SoftLanding\*\') is a WILDCARD - compare with -like,
+        # otherwise every such task would be reported NotFound.
         $allTasks = @(Get-SuiteCachedTasks)
-        $matches = @($allTasks | Where-Object { $_.TaskName -like $Entry.NamePattern -and (-not $path -or $_.TaskPath -eq $path) })
+        $matches = @($allTasks | Where-Object {
+            $_.TaskName -like $Entry.NamePattern -and
+            (-not $path -or ($pathIsPattern -and $_.TaskPath -like $path) -or (-not $pathIsPattern -and $_.TaskPath -eq $path))
+        })
     } else {
         $matches = @(Get-SuiteCachedTasks | Where-Object { $_.TaskName -eq $Entry.Name -and $_.TaskPath -eq $Entry.Path })
     }

@@ -19,18 +19,25 @@ param()
 
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'Core\CleanupEngine.ps1')
 
-if (-not (Test-SuiteIsAdmin)) {
-    Write-Warning 'Check-SystemHealth: DISM /RestoreHealth and sfc repairs require Administrator; run elevated for full effect.'
+$isAdmin = Test-SuiteIsAdmin
+if (-not $isAdmin) {
+    Write-Warning 'Check-SystemHealth: DISM /RestoreHealth and sfc repairs require Administrator; repair steps will be skipped (scan stays).'
 }
 
 $steps = @(
-    @{ Name = 'Dism /Online /Cleanup-Image /ScanHealth';    File = 'Dism.exe'; Args = @('/Online', '/Cleanup-Image', '/ScanHealth') },
-    @{ Name = 'Dism /Online /Cleanup-Image /RestoreHealth'; File = 'Dism.exe'; Args = @('/Online', '/Cleanup-Image', '/RestoreHealth') },
-    @{ Name = 'sfc /SCANNOW';                              File = 'sfc.exe';  Args = @('/SCANNOW') }
+    @{ Name = 'Dism /Online /Cleanup-Image /ScanHealth';    File = 'Dism.exe'; Args = @('/Online', '/Cleanup-Image', '/ScanHealth'); Repair = $false },
+    @{ Name = 'Dism /Online /Cleanup-Image /RestoreHealth'; File = 'Dism.exe'; Args = @('/Online', '/Cleanup-Image', '/RestoreHealth'); Repair = $true },
+    @{ Name = 'sfc /SCANNOW';                              File = 'sfc.exe';  Args = @('/SCANNOW'); Repair = $true }
 )
 
 foreach ($step in $steps) {
     Write-Host $step.Name
+    # Repairs are admin-gated (not merely warned about): non-admin gets the read-only
+    # ScanHealth only; -WhatIf still previews every step.
+    if ($step.Repair -and -not $isAdmin -and -not $WhatIfPreference) {
+        Write-Host '  Skipped (Admin): repair step requires elevation.'
+        continue
+    }
     if (-not $PSCmdlet.ShouldProcess($step.Name, 'Run')) {
         Write-Host "  Would run: $($step.Name)"
         continue

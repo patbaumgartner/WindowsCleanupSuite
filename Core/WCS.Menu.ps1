@@ -54,7 +54,7 @@
     Runners\Run-Menu.ps1 -Level 2 -Topics 'ServicesTasks,PrivacySettings'  # non-interactive preview
     Runners\Run-Menu.ps1 -Level 2 -Topics 'ServicesTasks,PrivacySettings' -Apply  # non-interactive apply
 #>
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [string[]]$Topics,
 
@@ -136,7 +136,11 @@ function Save-WCSPreferences {
         $existing = Read-WCSPreferences
         $autoDays = if ($existing -and $existing.AutoReRunDays) { [int]$existing.AutoReRunDays } else { 7 }
         $prefs = [ordered]@{ Level = $LevelKey; Topics = [string[]]$TopicNames; AutoReRunDays = $autoDays; Created = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') }
-        $prefs | ConvertTo-Json | Set-Content -Path $file -Encoding UTF8
+        # Atomic-ish write: a reader (e.g. the scheduler) must never see a truncated
+        # file and silently fall back to -Level 4 defaults. Write temp + replace.
+        $tmp = "$file.tmp"
+        $prefs | ConvertTo-Json | Set-Content -Path $tmp -Encoding UTF8
+        Move-Item -Path $tmp -Destination $file -Force
         Write-Host "  Saved preferences: $file" -ForegroundColor Gray
     } catch {
         Write-Warning "  Could not save preferences: $($_.Exception.Message)"
@@ -259,7 +263,13 @@ function New-WCSTopicJobs {
         }
         foreach ($script in $topic.Cleanups) {
             $path = Join-Path $root $script
-            if (-not (Test-Path $path)) { Write-Warning "  Missing script: $script"; continue }
+            if (-not (Test-Path $path)) {
+                # Never run a partial apply: a missing selected script (e.g. a broken
+                # launcher archive) must fail the run, not be skipped with exit 0.
+                Write-Error "  Missing script: $script - aborting (incomplete suite installation?)."
+                $global:WCS_MenuFailed = $true
+                return $null
+            }
             $jobs += [pscustomobject]@{
                 Topic       = $topic.Topic
                 Description = $topic.Description
@@ -286,7 +296,10 @@ function Invoke-WCSSequentialCleanups {
         $failed = $false
         try {
             $argHash = $job.Args
-            & $job.Path @argHash
+            # -ErrorAction Stop turns a cleanup's Write-Error (real failure) into a
+            # terminating error caught below - expected probes do NOT Write-Error.
+            # (-ErrorVariable is unusable here: it also captures HANDLED probe errors.)
+            & $job.Path @argHash -ErrorAction Stop
         } catch {
             $failed = $true
             Write-Warning "  Script failed: $($job.Script) - $($_.Exception.Message)"
@@ -400,6 +413,16 @@ function Show-WCSPlan {
     Write-Host '  Run preview (WhatIf, no changes): Runners\Run-Menu.ps1 -Level ... -Topics ...' -ForegroundColor Gray
 }
 
+function Confirm-WCSApply {
+    <# -Apply needs an explicit confirmation unless -AutoApprove is given (automation
+       and the scheduled task pass -AutoApprove; action menu [2] IS the confirmation). #>
+    param([switch]$AutoApprove)
+    if ($AutoApprove) { return $true }
+    Write-Host '  APPLY MODE: this changes system state (a System Restore point is created first).' -ForegroundColor Yellow
+    $ans = Read-Host "  Type YES to apply the selected cleanups, anything else cancels"
+    return ($ans -eq 'YES')
+}
+
 function New-WCSRestorePoint {
     <# Creates a System Restore point when admin; returns bool. #>
     if (-not (Test-SuiteIsAdmin)) {
@@ -482,17 +505,24 @@ function Invoke-WCSActionMenu {
                 Invoke-WCSTopicCleanups -LevelKey $LevelKey -Topics $Topics -AllowRisky:$AllowRisky -Quick:$Quick -NoParallel:$NoParallel -MaxParallel $MaxParallel
             }
             '2' {
-                Show-WCSPlan -LevelKey $LevelKey -Topics $Topics
-                New-WCSRestorePoint
-                Invoke-WCSTopicCleanups -LevelKey $LevelKey -Topics $Topics -Apply -AllowRisky:$AllowRisky -NoParallel -MaxParallel $MaxParallel
-                Write-Host '  Done. Backups are in Backups\ and restore scripts exist for rollback.' -ForegroundColor Green
+                if (-not (Test-SuiteIsAdmin)) {
+                    Write-Warning '  Apply requires Administrator privileges. Elevate with "Run as Administrator".'
+                } else {
+                    Show-WCSPlan -LevelKey $LevelKey -Topics $Topics
+                    if (New-WCSRestorePoint) {
+                        Invoke-WCSTopicCleanups -LevelKey $LevelKey -Topics $Topics -Apply -AllowRisky:$AllowRisky -NoParallel -MaxParallel $MaxParallel
+                        Write-Host '  Done. Backups are in Backups\ and restore scripts exist for rollback.' -ForegroundColor Green
+                    } else {
+                        Write-Warning '  Apply aborted: no System Restore point could be created. Enable System Restore and retry - applying without a safety net is not allowed.'
+                    }
+                }
             }
             '3' {
                 $updates = Invoke-WCSUpdateManager
                 if (-not $updates.Success) {
                     Write-Warning "  Updates did not fully succeed ($($updates.Manager)). Skipping re-debloat."
                 } else {
-                    Invoke-WCSDebloatAfterUpdates -Apply -Level $LevelKey
+                    Invoke-WCSDebloatAfterUpdates -Apply -Level $LevelKey -Topics $Topics -AllowRisky:$AllowRisky
                 }
             }
             '4' {
@@ -542,7 +572,7 @@ if ($Apply -and $Quick) {
 
 # Non-interactive scheduled re-run management: -ScheduleDays N registers, 0 unregisters, -1 = AutoReRunDays pref.
 if ($PSBoundParameters.ContainsKey('ScheduleDays')) {
-    if (Register-WCSReRunTask -Days $ScheduleDays) { exit 0 } else { exit 1 }
+    if (Register-WCSReRunTask -Days $ScheduleDays -WhatIf:$WhatIfPreference) { exit 0 } else { exit 1 }
 }
 
 # Non-interactive backup review: list all records, no restore.
@@ -601,7 +631,14 @@ if ($NonInteractive) {
             Write-Error '  -Apply requires Administrator privileges. Elevate with "Run as Administrator".'
             exit 1
         }
-        New-WCSRestorePoint
+        if (-not (Confirm-WCSApply -AutoApprove:$AutoApprove)) {
+            Write-Warning '  Apply canceled (for automation, pass -AutoApprove together with -Apply).'
+            exit 1
+        }
+        if (-not (New-WCSRestorePoint)) {
+            Write-Error '  Apply aborted: no System Restore point could be created. Enable System Restore and retry - applying without a safety net is not allowed.'
+            exit 1
+        }
         Invoke-WCSTopicCleanups -LevelKey $levelKey -Topics $topicNames -Apply -AllowRisky:$AllowRisky -NoParallel -MaxParallel $MaxParallel
         Write-Host '  Done.' -ForegroundColor Green
     } else {
@@ -627,7 +664,14 @@ else {
             exit 1
         }
         Show-WCSPlan -LevelKey $levelKey -Topics $topicNames
-        New-WCSRestorePoint
+        if (-not (Confirm-WCSApply -AutoApprove:$AutoApprove)) {
+            Write-Warning '  Apply canceled by user.'
+            exit 0
+        }
+        if (-not (New-WCSRestorePoint)) {
+            Write-Error '  Apply aborted: no System Restore point could be created. Enable System Restore and retry - applying without a safety net is not allowed.'
+            exit 1
+        }
         Invoke-WCSTopicCleanups -LevelKey $levelKey -Topics $topicNames -Apply -AllowRisky:$AllowRisky -NoParallel -MaxParallel $MaxParallel
         Write-Host '  Done. Backups are in Backups\ and restore scripts exist for rollback.' -ForegroundColor Green
     } else {

@@ -75,10 +75,21 @@ if ($WhatIf) {
     exit 0
 }
 
+function ConvertTo-WCSSafeFileName {
+    <# Local archive filename: strip URL query/fragment and filename-invalid chars
+       (a branch like 'feature/cleanup' or a signed URL would otherwise break the path). #>
+    param([string]$Name)
+    $n = ($Name -split '[?#]')[0]
+    $n = Split-Path -Path ($n -replace '/', '\') -Leaf
+    $n = $n -replace '[\\/:*?"<>|]', '_'
+    if ([string]::IsNullOrWhiteSpace($n)) { $n = 'WindowsCleanupSuite.zip' }
+    return $n
+}
+
 # --- Resolve the zip ------------------------------------------------------------
 $zip = $null
 if ($ZipUrl) {
-    $zip = [pscustomobject]@{ Url = $ZipUrl; Name = (Split-Path -Path $ZipUrl -Leaf); Source = '-ZipUrl override' }
+    $zip = [pscustomobject]@{ Url = $ZipUrl; Name = (ConvertTo-WCSSafeFileName $ZipUrl); Source = '-ZipUrl override' }
 } else {
     $latest = $null
     try {
@@ -92,7 +103,7 @@ if ($ZipUrl) {
         # one-liner works even before the first vX.Y.Z tag.
         $latest = [pscustomobject]@{
             Url    = "https://codeload.github.com/$Repo/zip/refs/heads/$Branch"
-            Name   = "WindowsCleanupSuite-$Branch.zip"
+            Name   = (ConvertTo-WCSSafeFileName "WindowsCleanupSuite-$Branch.zip")
             Source = "branch '$Branch' source archive (no release published yet)"
         }
         Write-Host "No release zip found on GitHub - falling back to $($latest.Source)" -ForegroundColor Yellow
@@ -117,18 +128,36 @@ if (-not (Test-Path $zipFile)) { Write-Error "Download failed (no file at $zipFi
 if (-not $InstallDir) { $InstallDir = Join-Path $env:TEMP 'WindowsCleanupSuite' }
 Write-Host "Extracting to: $InstallDir"
 # Wipe any previous extraction so stale files from an older release can never
-# mix into the new one ("Missing script" warnings). Removal can fail on locked
-# files (e.g. a suite instance still running from that dir) - retry, and if it
-# still fails, fall back to a fresh timestamped directory instead of merging.
+# mix into the new one ("Missing script" warnings) - but ONLY a directory that
+# really is a previous suite extraction (never an arbitrary caller-supplied dir),
+# and never the user's Backups/Config/Logs: those are moved aside first and
+# migrated into the fresh extraction below. Removal can fail on locked files;
+# fall back to a fresh timestamped directory instead of merging.
+$preserveDir = $null
 if (Test-Path $InstallDir) {
-    $removed = $false
-    for ($i = 0; $i -lt 3 -and -not $removed; $i++) {
-        Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
-        if (-not (Test-Path $InstallDir)) { $removed = $true } else { Start-Sleep -Seconds 2 }
-    }
-    if (-not $removed) {
+    $isSuiteDir = (Test-Path (Join-Path $InstallDir 'Runners\Run-Menu.ps1')) -or (Test-Path (Join-Path $InstallDir 'Cleanups'))
+    $preserve = @('Backups', 'Config', 'Logs') | Where-Object { Test-Path (Join-Path $InstallDir $_) }
+    if (-not $isSuiteDir -and -not $preserve) {
         $InstallDir = Join-Path $env:TEMP ("WindowsCleanupSuite-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
-        Write-Host "  Previous install dir was locked - using a fresh dir instead: $InstallDir" -ForegroundColor Yellow
+        Write-Host "  Existing dir is not a suite installation - leaving it untouched, using: $InstallDir" -ForegroundColor Yellow
+    } else {
+        if ($preserve) {
+            $preserveDir = Join-Path $env:TEMP ("wcs-preserve-" + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $preserveDir -Force | Out-Null
+            foreach ($p in $preserve) {
+                Move-Item -Path (Join-Path $InstallDir $p) -Destination (Join-Path $preserveDir $p) -Force -ErrorAction SilentlyContinue
+            }
+            Write-Host "  Preserved your Backups/Config/Logs (migrated into the new extraction)" -ForegroundColor DarkGray
+        }
+        $removed = $false
+        for ($i = 0; $i -lt 3 -and -not $removed; $i++) {
+            Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+            if (-not (Test-Path $InstallDir)) { $removed = $true } else { Start-Sleep -Seconds 2 }
+        }
+        if (-not $removed) {
+            $InstallDir = Join-Path $env:TEMP ("WindowsCleanupSuite-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+            Write-Host "  Previous install dir was locked - using a fresh dir instead: $InstallDir" -ForegroundColor Yellow
+        }
     }
 }
 try {
@@ -136,6 +165,19 @@ try {
 } catch {
     Write-Error "Failed to extract $zipFile to $InstallDir - $($_.Exception.Message)"
     exit 1
+}
+if ($preserveDir) {
+    # Branch archives add a top-level '<repo>-<branch>' folder - migrate into the
+    # directory that actually contains Runners\, if that is not the root.
+    $targetRoot = $InstallDir
+    if (-not (Test-Path (Join-Path $targetRoot 'Runners'))) {
+        $nested = Get-ChildItem -Path $InstallDir -Directory -ErrorAction SilentlyContinue | Where-Object { Test-Path (Join-Path $_.FullName 'Runners') } | Select-Object -First 1
+        if ($nested) { $targetRoot = $nested.FullName }
+    }
+    foreach ($p in @(Get-ChildItem -Path $preserveDir -Directory -ErrorAction SilentlyContinue)) {
+        Copy-Item -Path $p.FullName -Destination (Join-Path $targetRoot $p.Name) -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    Remove-Item -Path $preserveDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 # Sanity: a correct release zip keeps the directory structure (Cleanups\, Runners\).
 if (-not (Test-Path (Join-Path $InstallDir 'Cleanups')) -or -not (Test-Path (Join-Path $InstallDir 'Runners'))) {
@@ -159,8 +201,10 @@ if ($Launch) {
     $menuPath = Get-ChildItem -Path $InstallDir -Recurse -Filter 'Run-Menu.ps1' -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($menuPath) {
         Write-Host "Suite extracted to $InstallDir. Launch with: & '$($menuPath.FullName)'" -ForegroundColor Gray
+        exit 0
     } else {
-        Write-Host "Suite extracted to $InstallDir, but Run-Menu.ps1 was not found - check the archive layout." -ForegroundColor Yellow
+        # Same failure semantics as the launch path: no runnable menu = failed extraction.
+        Write-Error "Suite extracted to $InstallDir, but Run-Menu.ps1 was not found - check the archive layout."
+        exit 1
     }
-    exit 0
 }

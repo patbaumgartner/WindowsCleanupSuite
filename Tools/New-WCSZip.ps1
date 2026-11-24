@@ -32,7 +32,7 @@ function New-WCSZip {
     )
 
     if (-not $SourceRoot) { $SourceRoot = Split-Path -Parent $PSScriptRoot }
-    $SourceRoot = (Resolve-Path -Path $SourceRoot -ErrorAction Stop).Path
+    $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot -ErrorAction Stop).Path
     $DestinationPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DestinationPath)
     if (Test-Path -LiteralPath $DestinationPath) { Remove-Item -LiteralPath $DestinationPath -Force }
 
@@ -40,7 +40,7 @@ function New-WCSZip {
     $archive = [System.IO.Compression.ZipFile]::Open($DestinationPath, [System.IO.Compression.ZipArchiveMode]::Create)
     try {
         $count = 0
-        foreach ($item in (Get-ChildItem -Path $SourceRoot -File -Recurse -Force -ErrorAction SilentlyContinue)) {
+        foreach ($item in (Get-ChildItem -LiteralPath $SourceRoot -File -Recurse -Force -ErrorAction SilentlyContinue)) {
             # Never add the archive into itself (the destination often lives in SourceRoot).
             if ($item.FullName -ieq $DestinationPath) { continue }
             $rel = $item.FullName.Substring($SourceRoot.Length).TrimStart('\', '/') -replace '\\', '/'

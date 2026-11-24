@@ -106,6 +106,11 @@ function New-SuiteBackupFile {
 
     $target = Join-Path $BackupRoot $FileName
     if ($WhatIfPreference) { return $target }
+    # Never overwrite an existing backup: repeated runs must preserve the ORIGINAL
+    # pre-change state, otherwise a second run would back up the already-modified
+    # state (e.g. service StartType=3 after the first run set it to Manual) and
+    # restore would no longer restore the real original configuration.
+    if (Test-Path $target) { return $target }
     if (-not (Test-Path $BackupRoot)) { New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null }
     $Record | ConvertTo-Json -Depth 4 | Set-Content -Path $target -Encoding UTF8
     return $target
@@ -219,11 +224,22 @@ function Invoke-SuiteRegistryEntry {
                 $prev = $prop.$name; $had = $true
             } catch { $had = $false }
 
+            # Nothing to do when the value already matches - skip backup+mutation so
+            # repeated (e.g. scheduled) runs stay clean and never churn backups.
+            if ($had -and ([string]$prev -eq [string]$Entry.Value)) {
+                Write-Host "  [reg]     Already set: $key\$name = $($Entry.Value)"
+                continue
+            }
+
+            # PreviousType = the kind of the OLD value (ValueType is the NEW kind);
+            # restore must use the old kind or a changed type would be restored wrong.
+            $prevType = if ($had) { Get-WCSRegistryType $prev } else { '' }
+
             if (-not $Preview) {
                 $safeKey = ($key -replace '^[^:]*:', '') -replace '[\\/:*?"<>| ]', '_'
                 New-SuiteBackupFile -BackupRoot $BackupRoot -FileName "reg_${safeKey}_$(Get-SuiteSafeFileName $name).json" -Record @{
                     Type = 'Registry'; RegistryKey = $key; Name = $name
-                    HadPrevious = [bool]$had; PreviousValue = $prev
+                    HadPrevious = [bool]$had; PreviousValue = $prev; PreviousType = $prevType
                     NewValue = $Entry.Value; ValueType = $Entry.Type; Reason = $Entry.Reason
                 }
             }
@@ -243,7 +259,9 @@ function Invoke-SuiteRegistryEntry {
                     Stop-Service -Name $svcName -Force -ErrorAction SilentlyContinue
                 }
             } catch {
-                Write-Warning "  [reg]     Failed: $key\$name - $($_.Exception.Message)"
+                # Write-Error (non-terminating): the menu counts error records and exits
+                # nonzero - a failed mutation must not look like a successful run.
+                Write-Error "  [reg]     Failed: $key\$name - $($_.Exception.Message)"
             }
         }
     }
@@ -263,14 +281,18 @@ function Restore-SuiteRegistryRecords {
         try {
             if (-not (Test-Path $record.RegistryKey)) { New-Item -Path $record.RegistryKey -Force | Out-Null }
             if ($record.HadPrevious -and $null -ne $record.PreviousValue) {
-                $type = if ($record.ValueType) { $record.ValueType } else { 'DWord' }
+                # Prefer the recorded kind of the OLD value; ValueType (the NEW kind)
+                # is only a best-effort fallback for older backups.
+                $type = 'DWord'
+                if ($record.PSObject.Properties.Name -contains 'PreviousType' -and $record.PreviousType) { $type = [string]$record.PreviousType }
+                elseif ($record.ValueType) { $type = [string]$record.ValueType }
                 Set-ItemProperty -Path $record.RegistryKey -Name $record.Name -Value $record.PreviousValue -Type $type -ErrorAction Stop
             } else {
                 Remove-ItemProperty -Path $record.RegistryKey -Name $record.Name -ErrorAction SilentlyContinue
             }
             Write-Host "  [reg]     Restored: $($record.RegistryKey)\$($record.Name)"
         } catch {
-            Write-Warning "  [reg]     Restore failed: $($record.RegistryKey)\$($record.Name) - $($_.Exception.Message)"
+            Write-Error "  [reg]     Restore failed: $($record.RegistryKey)\$($record.Name) - $($_.Exception.Message)"
         }
     }
 }
@@ -315,6 +337,10 @@ function Invoke-SuiteServiceEntry {
             Write-Host "  [service] Already absent: $($svc.Name) - $($Entry.Reason)"
             continue
         }
+        if ([int]$start -eq $modeValue) {
+            Write-Host "  [service] Already ${Mode}: $($svc.Name) - $($Entry.Reason)"
+            continue
+        }
 
         if ($Preview) {
             Write-Host "  [service] Would set: $($svc.Name) -> $Mode - $($Entry.Reason)"
@@ -335,7 +361,7 @@ function Invoke-SuiteServiceEntry {
                 if ($svc.Status -eq 'Running') { Stop-Service -Name $svc.Name -Force -ErrorAction SilentlyContinue }
                 Write-Host "  [service] Set to ${Mode} via registry: $($svc.Name) - $($Entry.Reason)"
             } catch {
-                Write-Warning "  [service] Failed to change $($svc.Name): $($_.Exception.Message)"
+                Write-Error "  [service] Failed to change $($svc.Name): $($_.Exception.Message)"
             }
         }
     }
@@ -354,10 +380,12 @@ function Restore-SuiteServiceRecords {
         }
         try {
             $mode = switch ([int]$record.StartType) { 2 { 'Automatic' } 3 { 'Manual' } 4 { 'Disabled' } default { 'Manual' } }
-            Set-Service -Name $record.Name -StartupType $mode -ErrorAction SilentlyContinue
+            # -ErrorAction Stop: with SilentlyContinue an access-denied would still
+            # print 'Restored' - success must only be reported after a real success.
+            Set-Service -Name $record.Name -StartupType $mode -ErrorAction Stop
             Write-Host "  [service] Restored: $($record.Name) -> $mode"
         } catch {
-            Write-Warning "  [service] Restore failed: $($record.Name) - $($_.Exception.Message)"
+            Write-Error "  [service] Restore failed: $($record.Name) - $($_.Exception.Message)"
         }
     }
 }
@@ -439,6 +467,7 @@ function Set-WCSRegistryEntry {
         OldExists = [bool]$current.Exists
         OldValue = $oldValue
         OldType = $oldType
+        NewValue = $Entry.Value
         Reason = $Entry.Reason
     }
 
@@ -468,7 +497,7 @@ function Set-WCSRegistryEntry {
         Set-ItemProperty -Path $Entry.Path -Name $Entry.Name -Value $Entry.Value -Type $type -ErrorAction Stop
         Write-Host "  [reg]     Set: $($Entry.Path)\$($Entry.Name) = $($Entry.Value) ($type)"
     } catch {
-        Write-Warning "  [reg]     Failed: $($Entry.Path)\$($Entry.Name) - $($_.Exception.Message)"
+        Write-Error "  [reg]     Failed: $($Entry.Path)\$($Entry.Name) - $($_.Exception.Message)"
     }
 }
 

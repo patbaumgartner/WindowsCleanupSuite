@@ -28,6 +28,11 @@ param(
     [switch]$Quick
 )
 
+if ($Quick -and -not $WhatIfPreference) {
+    Write-Error '-Quick is a preview-only fast mode and cannot be combined with apply mode. Use -WhatIf or drop -Quick.'
+    exit 1
+}
+
 . (Join-Path $PSScriptRoot '..\..\Core\CleanupEngine.ps1')
 
 $manifest   = Get-SuiteManifest -CleanupName 'InstalledSoftware'
@@ -63,11 +68,9 @@ function Get-SuiteUninstallIndex {
 
 foreach ($entry in @($manifest.Win32Apps)) {
     if ($entry.Kept) { Write-Host "  Kept by user request: $($entry.Name)"; continue }
-    if (-not $PSCmdlet.ShouldProcess($entry.Name, "Remove Win32 app via uninstaller")) {
-        Write-Host "  Would remove Win32 app: $($entry.Name)"
-        continue
-    }
 
+    # Match installed apps FIRST (read-only, also in preview) so -WhatIf/-Quick report
+    # what is actually installed instead of 'Would remove' for every manifest entry.
     $found = $false
     foreach ($app in @(Get-SuiteUninstallIndex | Where-Object { $_.DisplayName -eq $entry.Name })) {
         if ($entry.Publisher -and $app.HasPublisher -and $app.Publisher -notlike $entry.Publisher) {
@@ -75,6 +78,11 @@ foreach ($entry in @($manifest.Win32Apps)) {
             continue
         }
         if ($app.UninstallString) {
+            if (-not $PSCmdlet.ShouldProcess($app.DisplayName, 'Remove Win32 app via uninstaller')) {
+                Write-Host "  Would remove Win32 app: $($app.DisplayName)"
+                $found = $true
+                continue
+            }
             $ip = $app.AllValues
             $displayName = $app.DisplayName
                 $values = @($ip.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object {
@@ -138,6 +146,11 @@ foreach ($entry in @($manifest.UwpApps)) {
             Write-Host "  Skipped (Protected): $($app.Name)"
             continue
         }
+        # Remove-AppxPackage has no usable -WhatIf: gate explicitly so previews are read-only.
+        if (-not $PSCmdlet.ShouldProcess($app.Name, "Remove UWP app ($scope)")) {
+            Write-Host "  Would remove UWP app ($scope): $($app.Name)"
+            continue
+        }
         New-SuiteBackupFile -BackupRoot $backupRoot -FileName "uwp_removed_$(Get-SuiteSafeFileName $app.Name).json" -Record @{
             Type = 'UwpRemoved'; Name = $app.Name; PackageFullName = $app.PackageFullName; Scope = $scope
         }
@@ -160,18 +173,25 @@ foreach ($entry in @($manifest.UwpApps)) {
     if (-not $canAllUsers) { continue }
     if ($Quick) { Write-Host "  Provisioned-package full scan skipped (-Quick): $pattern"; continue }
     try {
-        foreach ($pkg in @(Get-AppxProvisionedPackage -Online -AllUsers -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like $pattern })) {
-            $record = @{ Type = 'UwpProvisioned'; DisplayName = $pkg.DisplayName; PublisherId = $pkg.PublisherId; Architecture = $pkg.Architecture }
+        # NOTE: Get-AppxProvisionedPackage has no -AllUsers parameter (breaks on PS 5.1),
+        # and Remove-AppxProvisionedPackage does not support -WhatIf - so the whole
+        # removal is ShouldProcess-gated to keep previews truly read-only.
+        foreach ($pkg in @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like $pattern })) {
+            if (-not $PSCmdlet.ShouldProcess($pkg.DisplayName, 'Remove provisioned app')) {
+                Write-Host "  Would remove provisioned app: $($pkg.DisplayName)"
+                continue
+            }
+            $record = @{ Type = 'UwpProvisioned'; DisplayName = $pkg.DisplayName; PackageName = $pkg.PackageName; PublisherId = $pkg.PublisherId; Architecture = $pkg.Architecture }
             New-SuiteBackupFile -BackupRoot $backupRoot -FileName "uwp_$(Get-SuiteSafeFileName $pkg.DisplayName).json" -Record $record
             try {
-                Remove-AppxProvisionedPackage -Online -AllUsers -PackageName $pkg.DisplayName -ErrorAction SilentlyContinue | Out-Null
+                Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName -ErrorAction Stop | Out-Null
                 Write-Host "  Removed provisioned app: $($pkg.DisplayName)"
             } catch {
                 Write-Warning "  Could not remove provisioned app $($pkg.DisplayName): $($_.Exception.Message) (backup kept in $backupRoot)"
             }
         }
     } catch {
-        # Provisioned-package removal requires elevation; skip quietly if unavailable.
+        Write-Host "  Provisioned-package scan skipped: $($_.Exception.Message)"
     }
 }
 

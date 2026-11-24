@@ -69,6 +69,18 @@ if ($dns -and $dns.Enabled) {
                 try { $wasDhcp = ((Get-NetIPInterface -InterfaceIndex $iface.ifIndex -AddressFamily IPv4 -ErrorAction Stop).Dhcp) -eq 'Enabled' } catch {}
             } catch { $current = @(); $wasDhcp = $true }
 
+            # WasDhcp describes the IPv4 ADDRESS configuration, not the DNS origin: an
+            # adapter can have a DHCP address but manually assigned (static) DNS servers.
+            # Static DNS shows up in the interface's NameServer registry value (DHCP-assigned
+            # DNS lives in DhcpNameServer instead) - record it so restore never discards
+            # manually configured resolvers on a DHCP interface.
+            $staticDns = $false
+            try {
+                $ifKey = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$($iface.InterfaceGuid)"
+                $nsValue = (Get-ItemProperty -Path $ifKey -Name 'NameServer' -ErrorAction Stop).NameServer
+                $staticDns = -not [string]::IsNullOrWhiteSpace([string]$nsValue)
+            } catch { $staticDns = $false }
+
             if ($WhatIfPreference) {
                 Write-Host "  [dns]     Would set DNS on '$($iface.Name)' (ifIndex $($iface.ifIndex)) to $($dns.Servers -join ', ') - $($dns.Reason)"
                 continue
@@ -76,7 +88,7 @@ if ($dns -and $dns.Enabled) {
 
             New-SuiteBackupFile -BackupRoot $backupRoot -FileName "dns_if$($iface.ifIndex)_$(Get-SuiteSafeFileName $iface.Name).json" -Record @{
                 Type = 'Dns'; InterfaceIndex = $iface.ifIndex; InterfaceAlias = $iface.Name
-                WasDhcp = [bool]$wasDhcp; PreviousServers = $current; NewServers = @($dns.Servers); Reason = $dns.Reason
+                WasDhcp = [bool]$wasDhcp; WasStaticDns = [bool]$staticDns; PreviousServers = $current; NewServers = @($dns.Servers); Reason = $dns.Reason
             }
 
             try {

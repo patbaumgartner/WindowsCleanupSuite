@@ -1,7 +1,7 @@
 # WindowsCleanupSuite
 
 [![Build Status](https://img.shields.io/badge/CI-passing-brightgreen.svg)](https://github.com/patbaumgartner/WindowsCleanupSuite/actions)
-[![Release](https://img.shields.io/badge/Releases-v1.0.0-brightgreen.svg)](https://github.com/patbaumgartner/WindowsCleanupSuite/releases)
+[![Release](https://img.shields.io/badge/Releases-v1.2.0-brightgreen.svg)](https://github.com/patbaumgartner/WindowsCleanupSuite/releases)
 [![PowerShell 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://learn.microsoft.com/en-us/powershell/scripting/windows-powershell/overview)
 [![Windows 10/11](https://img.shields.io/badge/Windows-10/11-blue.svg)](https://www.microsoft.com/windows)
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -78,13 +78,14 @@ Perfect for scripts/CI:
 
 ```powershell
 # Preview only (safe, nothing changes)
-& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -Level 2 -Topics 'ServicesTasks,PrivacySettings'
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -NonInteractive -Level 2 -Topics 'ServicesTasks,PrivacySettings'
 
-# Apply changes (requires Administrator, System Restore point auto-created)
-& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -Level 3 -Topics 'ServicesTasks,PrivacySettings,WindowsUpdates' -Apply
+# Apply changes (requires Administrator + a typed YES confirmation, System Restore point auto-created;
+# -AutoApprove skips the prompt for automation). Apply aborts if no restore point can be created.
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -NonInteractive -Level 3 -Topics 'ServicesTasks,PrivacySettings,WindowsUpdates' -Apply -AutoApprove
 
 # Save your defaults (Level + Topics) for next time
-& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -Level 2 -Topics 'ServicesTasks' -SavePreferences
+& 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -NonInteractive -Level 2 -Topics 'ServicesTasks' -SavePreferences
 
 # Risky items (Network: NetBIOS off, static DNS):
 & 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -NonInteractive -Level 2 -Topics 'Network' -AllowRisky
@@ -104,7 +105,8 @@ Perfect for scripts/CI:
 # Review backup records before restoring (non-interactive listing):
 & 'WindowsCleanupSuite\Runners\Run-Menu.ps1' -ReviewBackups
 
-# Unified restore (restores Backups\ records; preview unless -Apply):
+# Unified restore (restores Backups\ records immediately; preview with -WhatIf):
+& 'WindowsCleanupSuite\Tools\Restore-WCSBackup.ps1' -Backups -WhatIf
 & 'WindowsCleanupSuite\Tools\Restore-WCSBackup.ps1' -Backups
 ```
 
@@ -224,17 +226,18 @@ admin-gated restore at the end):
 # menu: Actions → [5] Review backup records, then restore
 ```
 
-Restore everything:
+Restore everything (really restores; use `-WhatIf` to preview first):
 
 ```powershell
-& 'WindowsCleanupSuite\Tools\Restore-WCSBackup.ps1' -Backups
+& 'WindowsCleanupSuite\Tools\Restore-WCSBackup.ps1' -Backups -WhatIf   # preview only
+& 'WindowsCleanupSuite\Tools\Restore-WCSBackup.ps1' -Backups           # restore (needs Admin)
 ```
 
 Or restore a System Restore point:
 
 ```powershell
 & 'WindowsCleanupSuite\Tools\Restore-WCSBackup.ps1' -RestorePoint 3
-& 'WindowsCleanupSuite\Tools\Restore-WCSBackup.ps1' -RestorePoint -Latest
+& 'WindowsCleanupSuite\Tools\Restore-WCSBackup.ps1' -Latest
 ```
 
 Notes: restoring a System Restore point triggers an automatic reboot (type `YES`).
@@ -249,8 +252,15 @@ Run read-only audits to see current state:
 & 'WindowsCleanupSuite\Audit\Audit-State.ps1'
 & 'WindowsCleanupSuite\Audit\Audit-InstalledSoftware.ps1'
 & 'WindowsCleanupSuite\Audit\Audit-RunningServices.ps1'
-& 'WindowsCleanupSuite\Audit\Check-SystemHealth.ps1'   # sfc + DISM health checks
 & 'WindowsCleanupSuite\Audit\Perf-Snapshot.ps1'         # perf snapshot -> Logs\<ts>-perf-*.json
+```
+
+`Audit\Check-SystemHealth.ps1` is the exception: its DISM `/RestoreHealth` and `sfc /SCANNOW`
+steps **repair** the system (admin-only, skipped otherwise; DISM `/ScanHealth` is read-only).
+Preview everything with `-WhatIf`:
+
+```powershell
+& 'WindowsCleanupSuite\Audit\Check-SystemHealth.ps1' -WhatIf
 ```
 
 ---
@@ -259,6 +269,7 @@ Run read-only audits to see current state:
 
 ```
 WindowsCleanupSuite/
+├── Launcher.ps1                     # Self-executing download-and-run (irm <url> | iex)
 ├── Runners\
 │   └── Run-Menu.ps1                 # The only entry point (interactive menu / non-interactive CLI)
 ├── Core\
@@ -284,12 +295,17 @@ WindowsCleanupSuite/
 │   └── PowerPlan\                   # Ultimate Performance + hibernate off
 ├── Tools\
 │   ├── Restore-WCSBackup.ps1        # Restore backups + System Restore points
-│   └── Review-WCSBackup.ps1          # Review backup records (-List / interactive) before restoring
+│   ├── Review-WCSBackup.ps1         # Review backup records (-List / interactive) before restoring
+│   └── New-WCSZip.ps1               # Structure-preserving zip builder (releases/snapshots)
 ├── Audit\                           # State / installed software / running services / health
 │                                    # checks + Perf-Snapshot (before/after comparisons)
 ├── Tests\
-│   └── Invoke-SuiteTests.ps1        # Structural tests + menu smoke test (read-only)
-└── Logs\                            # Timestamped run logs
+│   ├── Invoke-SuiteTests.ps1        # Structural tests + menu smoke tests (no system changes)
+│   └── Invoke-PS51ParseCheck.ps1    # Parses every file with the PS 5.1 parser
+├── .github\workflows\               # ci.yml (validate + snapshot) / release.yml (tag releases)
+├── Config\UserPreferences.json      # Your saved Level/Topics/AutoReRunDays (git-ignored)
+├── Backups\                         # Original-state records per changed item (git-ignored)
+└── Logs\                            # Timestamped run logs (git-ignored)
 ```
 
 ---
@@ -305,17 +321,19 @@ WindowsCleanupSuite/
 - Extends: menu-era cleanup schema checks + extension manifest checks (TempAndJunkFiles, DNSReset, PowerPlan).
 - **Menu smoke test**: runs the menu non-interactively in preview mode; exit code must be `0`.
 - **Feature coverage**: parallel preview runner (runspace pool, `-NoParallel`/`-MaxParallel` fallbacks, `-Apply` stays sequential), `-Quick` dispatch and per-cleanup quick paths, scheduler (`AutoReRunDays` resolution, task command line, `-WhatIf` paths, admin gate), backup review tool.
-- **Wiring drift checks**: the catalog maps every topic to its cleanup scripts (ServicesTasks → StartupBloat + ServicesAndTasks + InstalledSoftware), the engine run order covers all cleanups, every cleanup has a `Restore-*.ps1`, the legacy runner scripts are gone (no references anywhere in code), and `-AllowRisky` gating is present.
+- **Hardening coverage**: original backups never overwritten, preview-safe AppX/provisioned handling, `-Quick` standalone guards, admin gates, DNS static-on-DHCP restore, PowerPlan GUID/state/hibernate restore, restore type fidelity, single-owner restore, scheduler argument-injection validation, apply confirmation/restore-point abort, honest failure exit codes.
+- **Wiring drift checks**: the ServicesTasks catalog mapping (→ StartupBloat + ServicesAndTasks + InstalledSoftware), the engine run order covers all cleanups, every cleanup has a `Restore-*.ps1`, the legacy runner scripts are gone (no references anywhere in code), and `-AllowRisky` gating is present.
 - Independence check: no references to the previous project.
 
 ---
 
 ## 🔒 Safety & Reversibility
 
-- **Preview by default** — the menu never applies changes without confirmation (`-Apply`/Actions `[2]`); every cleanup script supports `-WhatIf`.
+- **Preview by default** — nothing changes without `-Apply` (or Actions `[2]`). `-Apply` additionally requires a typed **YES** confirmation (skipped with `-AutoApprove` for automation) and **aborts if no System Restore point can be created**. Every cleanup script supports `-WhatIf`.
 - **`-AllowRisky` gate** — manifest entries flagged `Risky = $true` (NetBIOS off, static DNS resolvers, VPN/Citrix services, Windows Search indexing, Connected Devices Platform) are skipped unless `-AllowRisky` is passed.
 - **System Restore point** created automatically on apply (admin required).
-- **Backups** (`Backups\`) of every changed item; restore scripts (`Restore-*.ps1`) for each cleanup.
+- **Backups** (`Backups\`) keep the ORIGINAL state of every changed item (repeated runs never overwrite them); restore scripts (`Restore-*.ps1`) for each cleanup.
+- **Reversibility exceptions** (read before applying): junk-file/event-log deletions (`TempAndJunkFiles`) and the `DNSReset` stack reset are **not** restorable; removed **UWP/provisioned apps** are reinstalled from the Microsoft Store, not auto-restored; Win32 apps get their Uninstall registry keys back, not a reinstallation.
 - **No data deletion of important items**: protected patterns (Intel DSA, drivers) are never touched; OneDrive/Dropbox/Teams/PowerToys/TeamViewer remain kept per your needs.
 - **Risky items are explicit**: `Privacy` (Raphire policies), `Network` (NetBIOS off, static DNS) — apply via `-AllowRisky` or the menu option.
 - **Perf snapshots**: `Audit\Perf-Snapshot.ps1` writes read-only before/after JSON for a/b comparison (run with `-Phase Before` / `-Phase After` around a cleanup).
@@ -340,5 +358,5 @@ PRs welcome. Follow the existing patterns: data-driven `Manifest.psd1` + `Disabl
 ## 🚀 Releases
 
 Downloadable archives are attached to GitHub Releases (tag `vX.Y.Z`).
-`WindowsCleanupSuite-vX.Y.Z.zip` + `SHA256.txt` + a downloadable snapshot from every build.
+`WindowsCleanupSuite-vX.Y.Z.zip` + `WindowsCleanupSuite-vX.Y.Z.zip.SHA256` + a downloadable snapshot (zip + `.zip.SHA256`) from every build.
 

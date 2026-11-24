@@ -19,10 +19,13 @@ $WCS_ReRunTaskName = 'WindowsCleanupSuite_ReRun'
 function Get-WCSRoot { return Split-Path -Parent $PSScriptRoot }
 
 function Get-WCSPowerShellExe {
-    $name = if (Get-Command pwsh -ErrorAction SilentlyContinue) { 'pwsh' } else { 'powershell' }
-    $cmd = Get-Command $name -ErrorAction SilentlyContinue
+    # A SYSTEM task must not execute binaries from user-writable locations: prefer the
+    # machine-wide Windows PowerShell (admin-controlled); pwsh is only a fallback.
+    $systemPs = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (Test-Path $systemPs) { return $systemPs }
+    $cmd = Get-Command pwsh -ErrorAction SilentlyContinue
     if ($cmd -and $cmd.Source) { return $cmd.Source }
-    return (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe')
+    return $systemPs
 }
 
 function Test-WCSIsAdmin {
@@ -53,14 +56,36 @@ function Get-WCSReRunDays {
 }
 
 function Get-WCSReRunActionArguments {
-    <# Run-Menu.ps1 argument string for the scheduled task; honors stored Level/Topics. #>
+    <# Run-Menu.ps1 argument string for the scheduled task; honors stored Level/Topics.
+       Values are validated first: the task runs as SYSTEM, so a malformed or hostile
+       preference (e.g. Level = '4 -AllowRisky') must not become extra CLI arguments. #>
     param([psobject]$Prefs = $null)
     if ($null -eq $Prefs) { $Prefs = Get-WCSReRunPreferences }
-    $levelArg = if ($Prefs -and $Prefs.Level) { [string]$Prefs.Level } else { '4' }
+    $validLevels = @('1', '2', '3', '4', 'Safe', 'Balanced', 'Aggressive', 'Extreme')
+    $levelArg = '4'
+    if ($Prefs -and $Prefs.Level) {
+        $candidate = [string]$Prefs.Level
+        if ($validLevels -contains $candidate) { $levelArg = $candidate }
+        else { Write-Warning "Ignoring invalid stored Level '$candidate' (valid: $($validLevels -join ', ')) - falling back to 4." }
+    }
     $arg = "-NonInteractive -Level $levelArg -Apply -AutoApprove"
     if ($Prefs -and $Prefs.Topics -and @($Prefs.Topics).Count) {
-        $topics = (@($Prefs.Topics) | ForEach-Object { [string]$_ }) -join ','
-        $arg += " -Topics '$topics'"
+        $validTopics = @()
+        $catalogTopics = $null
+        if (Get-Command Get-WCSValidTopicNames -ErrorAction SilentlyContinue) { $catalogTopics = @(Get-WCSValidTopicNames) }
+        foreach ($t in @($Prefs.Topics)) {
+            $name = [string]$t
+            if ($catalogTopics) {
+                if ($catalogTopics -contains $name) { $validTopics += $name }
+                else { Write-Warning "Ignoring unknown stored topic '$name'." }
+            } elseif ($name -match '^[A-Za-z0-9]+$') {
+                # Catalog not loaded: only accept simple alphanumeric names (no injection).
+                $validTopics += $name
+            } else {
+                Write-Warning 'Ignoring unsafe stored topic value.'
+            }
+        }
+        if ($validTopics.Count) { $arg += " -Topics '$($validTopics -join ',')'" }
     }
     return $arg
 }
@@ -75,14 +100,21 @@ function Register-WCSReRunTask {
     param(
         [ValidateRange(-1, 365)][int]$Days = -1,
         [ValidateRange(0, 23)][int]$Hour = 8,
-        [switch]$WhatIf
+        [switch]$WhatIf,
+        [psobject]$Prefs = $null   # injectable for hermetic tests; default reads Config\UserPreferences.json
     )
 
     if ($Days -eq 0) { return (Unregister-WCSReRunTask -WhatIf:$WhatIf) }
 
-    $prefs = Get-WCSReRunPreferences
-    $days = Get-WCSReRunDays -Days $Days -Prefs $prefs
     $root = Get-WCSRoot
+    $prefsFile = Join-Path $root 'Config\UserPreferences.json'
+    $fileExisted = Test-Path $prefsFile
+    if ($null -eq $Prefs) { $prefs = Get-WCSReRunPreferences } else { $fileExisted = $false }
+    if ($fileExisted -and $null -eq $prefs) {
+        Write-Error '  Config\UserPreferences.json exists but is unreadable/invalid JSON - fix or remove it before registering (refusing to silently fall back to -Level 4 defaults).'
+        return $false
+    }
+    $days = Get-WCSReRunDays -Days $Days -Prefs $prefs
     $runScript = Join-Path $root 'Runners\Run-Menu.ps1'
     if (-not (Test-Path $runScript)) { Write-Error "Run-Menu.ps1 not found at $runScript"; return $false }
 
@@ -92,10 +124,12 @@ function Register-WCSReRunTask {
     if ($startDate -le (Get-Date)) { $startDate = $startDate.AddDays(1) }
 
     $trigger = New-ScheduledTaskTrigger -Once -At $startDate -RepetitionInterval (New-TimeSpan -Days $days) -RepetitionDuration ([TimeSpan]::MaxValue)
-    $action = New-ScheduledTaskAction -Execute $exe -Argument "-File `"$runScript`" $actionArgs"
+    # -NoProfile: no user-profile side effects; -ExecutionPolicy Bypass: the scheduled
+    # run must not silently fail on Restricted/AllSigned machines (scripts are unsigned).
+    $action = New-ScheduledTaskAction -Execute $exe -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$runScript`" $actionArgs"
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -WakeToRun
 
-    $summary = "task '$WCS_ReRunTaskName' (start $($startDate.ToShortTimeString()), every $days day(s), as SYSTEM, cmd: $exe -File $runScript $actionArgs)"
+    $summary = "task '$WCS_ReRunTaskName' (start $($startDate.ToShortTimeString()), every $days day(s), as SYSTEM, cmd: $exe -NoProfile -ExecutionPolicy Bypass -File $runScript $actionArgs)"
     if ($WhatIf) {
         Write-Host "Would register $summary" -ForegroundColor Cyan
         return $true

@@ -33,12 +33,48 @@ if (-not $isAdmin) {
 $powercfg = Join-Path $env:SystemRoot 'System32\powercfg.exe'
 $plan = $manifest.PowerPlans[0]
 
+function Get-WCSPowerCfgGuid {
+    <# powercfg output is localized, but the GUID format is stable - parse it. #>
+    param([object[]]$Output)
+    foreach ($line in @($Output)) {
+        $m = [regex]::Match([string]$line, '[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}')
+        if ($m.Success) { return $m.Value }
+    }
+    return $null
+}
+
+# State record: the previously active scheme, the GUID of the duplicate we create,
+# and the previous hibernation state - everything Restore-PowerPlan.ps1 needs to
+# put the machine back exactly as it was.
+$stateRecord = [ordered]@{
+    Type = 'PowerPlanState'; PreviousActiveScheme = ''; CreatedScheme = ''
+    HibernateExists = $false; HibernateEnabled = $null
+}
+try {
+    $hib = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' -Name 'HibernateEnabled' -ErrorAction Stop
+    $stateRecord.HibernateExists = $true
+    $stateRecord.HibernateEnabled = [int]$hib.HibernateEnabled
+} catch { $stateRecord.HibernateExists = $false }
+
 if (-not $PSCmdlet.ShouldProcess($plan.GUID, "Duplicate and activate power plan '$($plan.Name)' (Ultimate Performance)")) {
     Write-Host "  Would activate power plan: $($plan.Name) ($($plan.GUID))"
 } elseif (Test-Path $powercfg) {
-    & $powercfg -duplicatescheme $plan.GUID 2>$null | Out-Null
-    & $powercfg -setactive $plan.GUID 2>$null | Out-Null
-    Write-Host "  Activated power plan: $($plan.Name) ($($plan.GUID))"
+    $prev = Get-WCSPowerCfgGuid (& $powercfg -getactivescheme 2>$null)
+    if ($prev) { $stateRecord.PreviousActiveScheme = $prev }
+    # -duplicatescheme creates a NEW scheme with a NEW GUID - activating the source
+    # GUID afterwards would activate the wrong plan, so parse and use the new one.
+    $newGuid = Get-WCSPowerCfgGuid (& $powercfg -duplicatescheme $plan.GUID 2>$null)
+    if (-not $newGuid) {
+        Write-Warning '  Could not determine the duplicated power scheme GUID - skipping activation'
+    } else {
+        & $powercfg -setactive $newGuid 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            $stateRecord.CreatedScheme = $newGuid
+            Write-Host "  Activated power plan: $($plan.Name) ($newGuid)"
+        } else {
+            Write-Warning "  powercfg -setactive $newGuid failed with exit code $LASTEXITCODE"
+        }
+    }
 } else {
     Write-Warning "  powercfg.exe not found at $powercfg - skipping power plan activation"
 }
@@ -72,12 +108,20 @@ try {
 
 # Debloat: disable hibernate entirely (faster boot, less disk churn; fast startup
 # is separately disabled by the WindowsUpdates cleanup via HiberbootEnabled=0).
+# Requires elevation; the previous state is backed up above and restored by
+# Restore-PowerPlan.ps1 (powercfg /HIBERNATE ON|OFF).
 if (Test-Path $powercfg) {
-    if ($PSCmdlet.ShouldProcess('powercfg', 'HIBERNATE ON then OFF (disable hibernation for faster boot)')) {
-        & $powercfg /HIBERNATE ON 2>$null | Out-Null
-        $hiberOff = & $powercfg /HIBERNATE OFF 2>$null
-        Write-Host "  Disabled hibernate: $hiberOff"
+    if (-not $isAdmin) {
+        Write-Host '  Skipped (Admin): disable hibernate (powercfg /HIBERNATE OFF)'
+    } elseif ($PSCmdlet.ShouldProcess('powercfg', 'HIBERNATE OFF (disable hibernation for faster boot)')) {
+        & $powercfg /HIBERNATE OFF 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Host '  Disabled hibernate (powercfg /HIBERNATE OFF)' }
+        else { Write-Warning "  powercfg /HIBERNATE OFF failed with exit code $LASTEXITCODE" }
     } else {
         Write-Host '  Would disable hibernate (powercfg /HIBERNATE OFF)'
     }
+}
+
+if ($stateRecord.PreviousActiveScheme -or $stateRecord.CreatedScheme -or $stateRecord.HibernateExists) {
+    New-SuiteBackupFile -BackupRoot $backupRoot -FileName 'powerplan_state.json' -Record $stateRecord
 }

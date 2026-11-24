@@ -49,7 +49,7 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot)) {
         Set-ItemProperty -Path $record.Path -Name $record.Name -Value $record.Value -ErrorAction Stop
         Write-Host "  Restored [$($record.Hive)] $($record.Name)"
     } catch {
-        Write-Warning "  Failed to restore '$($record.Name)': $($_.Exception.Message)"
+        Write-Error "  Failed to restore '$($record.Name)': $($_.Exception.Message)"
     }
 }
 

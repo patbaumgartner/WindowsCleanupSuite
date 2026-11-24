@@ -298,7 +298,12 @@ try {
     Test-SuiteCheck -Name 'Zip: all 14 Manifest.psd1 present (no name collisions)' -Pass (@($zipEntries | Where-Object { $_ -like '*/Manifest.psd1' }).Count -eq 14)
     Test-SuiteCheck -Name 'Zip: no legacy runners in archive' -Pass (@($zipEntries | Where-Object { $_ -match 'Run-Cleanup|Run-Monthly|Restore-All' }).Count -eq 0)
     Test-SuiteCheck -Name 'Zip: .git/Logs/Backups excluded' -Pass (@($zipEntries | Where-Object { $_ -match '(^|/)\.git/|(^|/)Logs/|(^|/)Backups/' }).Count -eq 0)
-    Test-SuiteCheck -Name 'Zip: destination inside source root is not archived into itself' -Pass (Test-Path $zipInRoot)
+    $z2 = [System.IO.Compression.ZipFile]::OpenRead($zipInRoot)
+    $zipInRootEntries = @($z2.Entries | ForEach-Object { $_.FullName })
+    $z2.Dispose()
+    Test-SuiteCheck -Name 'Zip: destination inside source root is not archived into itself' -Pass (
+        (Test-Path $zipInRoot) -and
+        (@($zipInRootEntries | Where-Object { $_ -like 'wcs-zip-test-*' }).Count -eq 0))
 } finally {
     if (Test-Path $zipTest) { Remove-Item $zipTest -Force -ErrorAction SilentlyContinue }
     if (Test-Path $zipInRoot) { Remove-Item $zipInRoot -Force -ErrorAction SilentlyContinue }
@@ -494,8 +499,8 @@ Test-SuiteCheck -Name 'Scheduler: task command line honors stored Level/Topics (
     ((Get-WCSReRunActionArguments -Prefs ([pscustomobject]@{ Level = '2'; Topics = @('ServicesTasks', 'PrivacySettings') })) -match '-Level 2') -and
     ((Get-WCSReRunActionArguments -Prefs ([pscustomobject]@{ Level = '2'; Topics = @('ServicesTasks', 'PrivacySettings') })) -match 'ServicesTasks,PrivacySettings'))
 Test-SuiteCheck -Name 'Scheduler: -WhatIf register/unregister previews return $true without touching the system' -Pass (
-    (Register-WCSReRunTask -Days 3 -WhatIf) -eq $true -and
-    (Register-WCSReRunTask -Days 0 -WhatIf) -eq $true)
+    (Register-WCSReRunTask -Days 3 -WhatIf -Prefs ([pscustomobject]@{})) -eq $true -and
+    (Register-WCSReRunTask -Days 0 -WhatIf -Prefs ([pscustomobject]@{})) -eq $true)
 $schedText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Core\WCS.Scheduler.ps1') -ErrorAction SilentlyContinue
 Test-SuiteCheck -Name 'Scheduler: registers as SYSTEM, admin-gated, -Days range -1..365, reads AutoReRunDays' -Pass (
     $schedText -match 'ValidateRange\(-1, 365\)' -and
@@ -530,6 +535,145 @@ $quickPlain = (($quickOut | Out-String) -replace '\x1b\[[0-9;]*m', '')
 Test-SuiteCheck -Name 'Smoke: -NonInteractive -Level 2 -Topics ServicesTasks -Quick preview exits 0' -Pass ($quickExit -eq 0)
 Test-SuiteCheck -Name 'Smoke: quick preview header shows +quick and +parallel modes' -Pass (
     $quickPlain -match '\+quick' -and $quickPlain -match '\+parallel')
+
+# --- 10. Hardening regressions (deep-review fixes) --------------------------------------
+
+# 10a. Backups: a second run must never overwrite the ORIGINAL pre-change record.
+$tmpBackup = Join-Path ([System.IO.Path]::GetTempPath()) "wcs-backup-test-$PID"
+try {
+    $null = New-SuiteBackupFile -BackupRoot $tmpBackup -FileName 'svc_test.txt' -Record @{ Type = 'Service'; StartType = 2 }
+    $null = New-SuiteBackupFile -BackupRoot $tmpBackup -FileName 'svc_test.txt' -Record @{ Type = 'Service'; StartType = 3 }
+    $savedRecord = Get-Content -Raw -Path (Join-Path $tmpBackup 'svc_test.txt') | ConvertFrom-Json
+    Test-SuiteCheck -Name 'Backups: repeated runs preserve the ORIGINAL record (no overwrite)' -Pass ($savedRecord.StartType -eq 2)
+} finally {
+    if (Test-Path $tmpBackup) { Remove-Item -Recurse -Force $tmpBackup -ErrorAction SilentlyContinue }
+}
+
+# 10b. -Quick is preview-only in the heavy scripts themselves (not just the menu).
+$quickGuardOk = $true
+foreach ($rel in @('Cleanups\InstalledSoftware\Disable-InstalledSoftware.ps1', 'Cleanups\TempAndJunkFiles\Disable-TempAndJunkFiles.ps1', 'Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1')) {
+    $t = Get-Content -Raw -Path (Join-Path $SuiteRoot $rel) -ErrorAction SilentlyContinue
+    if ($t -notmatch '\$Quick -and -not \$WhatIfPreference') { $quickGuardOk = $false }
+}
+Test-SuiteCheck -Name 'Quick: all three heavy scripts reject -Quick without -WhatIf standalone' -Pass $quickGuardOk
+
+# 10c. InstalledSoftware: provisioned handling is PS 5.1-compatible and preview-safe.
+$instText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\InstalledSoftware\Disable-InstalledSoftware.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'InstalledSoftware: provisioned scan has no -AllUsers (PS 5.1), removes by PackageName, ShouldProcess-gated' -Pass (
+    ($instText -notmatch 'Get-AppxProvisionedPackage -Online -AllUsers') -and
+    ($instText -match 'Remove-AppxProvisionedPackage -Online -PackageName \$pkg\.PackageName') -and
+    ($instText -match 'ShouldProcess\(\$pkg\.DisplayName, ''Remove provisioned app''\)') -and
+    ($instText -match 'PackageName = \$pkg\.PackageName'))
+Test-SuiteCheck -Name 'InstalledSoftware: UWP removal is ShouldProcess-gated (preview cannot remove AppX)' -Pass (
+    $instText -match 'ShouldProcess\(\$app\.Name, "Remove UWP app \(\$scope\)"\)')
+Test-SuiteCheck -Name 'InstalledSoftware: Win32 preview scans installed apps BEFORE the ShouldProcess gate' -Pass (
+    $instText -match 'Match installed apps FIRST')
+$instRestoreText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\InstalledSoftware\Restore-InstalledSoftware.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'InstalledSoftware: restore documents provisioned records as not auto-restorable + admin gate' -Pass (
+    ($instRestoreText -match 'UwpProvisioned') -and ($instRestoreText -match 'Skipped \(Admin\)'))
+
+# 10d. LoginSafe exclusions only apply when -LoginSafe was actually requested.
+$wsText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'ServicesAndTasks: LoginSafe exclusions gated behind -LoginSafe' -Pass (
+    $wsText -match 'if \(\$LoginSafe -and \(Test-SuiteLoginSafeExcluded')
+Test-SuiteCheck -Name 'ServicesAndTasks: AppModel backup records value existence (UserEnabledStartupOnceExists/LastDisabledTimeExists)' -Pass (
+    ($wsText -match 'UserEnabledStartupOnceExists') -and ($wsText -match 'LastDisabledTimeExists'))
+$wsRestoreText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\WindowsSpeedup\Restore-ServicesAndTasks.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'ServicesAndTasks: restore prefers Enabled flag, QWORD LastDisabledTime, removes originally-absent values' -Pass (
+    ($wsRestoreText -match 'hasEnabled') -and
+    ($wsRestoreText -match '\[long\]\$record\.LastDisabledTime') -and
+    ($wsRestoreText -match 'LastDisabledTimeExists') -and
+    ($wsRestoreText -match 'VisualFXSettingExists'))
+
+# 10e. TempAndJunkFiles: Package Cache is not junk; admin-only steps are gated.
+$tjManifest = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\TempAndJunkFiles\Manifest.psd1') -ErrorAction SilentlyContinue
+$tjText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\TempAndJunkFiles\Disable-TempAndJunkFiles.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'TempAndJunkFiles: Package Cache removed from junk targets (installer payloads)' -Pass (
+    $tjManifest -notmatch "'%PROGRAMDATA%\\Package Cache',")
+Test-SuiteCheck -Name 'TempAndJunkFiles: admin gates for system dirs, event logs, defrag' -Pass (
+    ($tjText -match 'Skipped \(Admin\): clear event logs') -and
+    ($tjText -match 'Skipped \(Admin\): defragment') -and
+    ($tjText -match '\$resolved -like "\$\(\$env:SystemRoot\)\\\*"'))
+
+# 10f. Network: static DNS on a DHCP interface must survive restore.
+$netText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\Network\Disable-Network.ps1') -ErrorAction SilentlyContinue
+$netRestoreText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\Network\Restore-Network.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Network: backup records WasStaticDns (DNS origin, not IP DHCP state)' -Pass (
+    ($netText -match 'WasStaticDns = \[bool\]\$staticDns') -and ($netText -match "NameServer"))
+Test-SuiteCheck -Name 'Network: restore honors WasStaticDns and is admin-gated' -Pass (
+    ($netRestoreText -match 'WasStaticDns') -and ($netRestoreText -match 'nothing was applied'))
+
+# 10g. PowerPlan: activates the DUPLICATED scheme, backs up previous plan + hibernation.
+$ppText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\PowerPlan\Enable-UltimatePerformancePlan.ps1') -ErrorAction SilentlyContinue
+$ppRestoreText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\PowerPlan\Restore-PowerPlan.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'PowerPlan: parses the new GUID from -duplicatescheme and activates it' -Pass (
+    ($ppText -match 'Get-WCSPowerCfgGuid') -and ($ppText -match '-setactive \$newGuid'))
+Test-SuiteCheck -Name 'PowerPlan: PowerPlanState backup (previous scheme + hibernation); hibernate admin-gated' -Pass (
+    ($ppText -match "Type = 'PowerPlanState'") -and
+    ($ppText -match 'HibernateEnabled') -and
+    ($ppText -match 'Skipped \(Admin\): disable hibernate'))
+Test-SuiteCheck -Name 'PowerPlan: restore reactivates PreviousActiveScheme and restores hibernation ON/OFF' -Pass (
+    ($ppRestoreText -match 'PreviousActiveScheme') -and ($ppRestoreText -match 'HIBERNATE \$onOff'))
+
+# 10h. Menu/entry points: apply safety + honest failures + -WhatIf support.
+$menuText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Core\WCS.Menu.ps1') -ErrorAction SilentlyContinue
+$runnerText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Runners\Run-Menu.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Menu: both entry scripts support -WhatIf (SupportsShouldProcess)' -Pass (
+    ($menuText -match 'CmdletBinding\(SupportsShouldProcess = \$true\)') -and
+    ($runnerText -match 'CmdletBinding\(SupportsShouldProcess = \$true\)'))
+Test-SuiteCheck -Name 'Menu: apply requires confirmation (-AutoApprove), aborts without a restore point' -Pass (
+    ($menuText -match 'function Confirm-WCSApply') -and
+    (@(Select-String -Path (Join-Path $SuiteRoot 'Core\WCS.Menu.ps1') -Pattern 'Apply aborted: no System Restore point').Count -ge 2))
+Test-SuiteCheck -Name 'Menu: missing cleanup script aborts job construction (no partial apply)' -Pass (
+    $menuText -match 'Write-Error "  Missing script:')
+Test-SuiteCheck -Name 'Menu: sequential runner fails on Write-Error (-ErrorAction Stop)' -Pass (
+    $menuText -match '& \$job\.Path \@argHash -ErrorAction Stop')
+Test-SuiteCheck -Name 'Menu: preferences written atomically (temp file + Move-Item)' -Pass (
+    $menuText -match 'Move-Item -Path \$tmp -Destination \$file -Force')
+Test-SuiteCheck -Name 'Menu: -ScheduleDays forwards -WhatIf to the scheduler' -Pass (
+    $menuText -match 'Register-WCSReRunTask -Days \$ScheduleDays -WhatIf:\$WhatIfPreference')
+
+# 10i. Scheduler: SYSTEM task hardening + argument-injection validation.
+Test-SuiteCheck -Name 'Scheduler: task action uses -NoProfile -ExecutionPolicy Bypass and System32 PowerShell preferred' -Pass (
+    ($schedText -match '-NoProfile -ExecutionPolicy Bypass -File') -and
+    ($schedText -match 'if \(Test-Path \$systemPs\) \{ return \$systemPs \}'))
+$injectedArgs = Get-WCSReRunActionArguments -Prefs ([pscustomobject]@{ Level = '4 -AllowRisky'; Topics = @('ServicesTasks', 'Bad;Topic') })
+Test-SuiteCheck -Name 'Scheduler: hostile stored Level/Topics cannot inject task arguments' -Pass (
+    ($injectedArgs -match '-Level 4') -and
+    ($injectedArgs -notmatch '-AllowRisky') -and
+    ($injectedArgs -notmatch 'Bad;Topic') -and
+    ($injectedArgs -match "ServicesTasks"))
+Test-SuiteCheck -Name 'Scheduler: unreadable prefs file fails registration instead of falling back to -Level 4' -Pass (
+    $schedText -match 'unreadable/invalid JSON')
+
+# 10j. Engine honesty + restore type fidelity.
+Test-SuiteCheck -Name 'Engine: generic registry records capture PreviousType (old kind) + NewValue' -Pass (
+    ($engineText -match 'PreviousType = \$prevType') -and ($engineText -match 'NewValue = \$Entry.Value'))
+Test-SuiteCheck -Name 'Engine: service restore uses -ErrorAction Stop (no fake success)' -Pass (
+    $engineText -match 'Set-Service -Name \$record\.Name -StartupType \$mode -ErrorAction Stop')
+$toolText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Tools\Restore-WCSBackup.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Restore tool: no bare $WhatIf variable (only $WhatIfPreference)' -Pass (
+    ($toolText -notmatch '\(-not \$WhatIf\)') -and ($toolText -notmatch '-WhatIf:\$WhatIf(?![A-Za-z])'))
+Test-SuiteCheck -Name 'Restore tool: single-owner restore (no duplicate registry passes) + error propagation' -Pass (
+    ($toolText -match '\$ownedCleanups') -and ($toolText -match '-WhatIf:\$WhatIfPreference -ErrorAction Stop'))
+
+# 10k. Updates + audits + zip helper hardening.
+$updatesText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Core\WCS.Updates.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Updates: re-debloat forwards Topics/AllowRisky (user selection preserved)' -Pass (
+    ($updatesText -match '\[string\[\]\]\$Topics') -and ($updatesText -match '\@extraArgs'))
+$auditStateText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Audit\Audit-State.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Audit-State: PathPattern compared with -like (wildcards work)' -Pass (
+    $auditStateText -match '\$pathIsPattern -and \$_\.TaskPath -like \$path')
+$healthText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Audit\Check-SystemHealth.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Check-SystemHealth: repair steps hard admin-gated (scan stays read-only)' -Pass (
+    ($healthText -match 'Skipped \(Admin\): repair step') -and ($healthText -match '\$WhatIfPreference'))
+$zipHelperText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Tools\New-WCSZip.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'New-WCSZip: LiteralPath for wildcard-safe source handling' -Pass (
+    ($zipHelperText -match 'Resolve-Path -LiteralPath') -and ($zipHelperText -match 'Get-ChildItem -LiteralPath'))
+
+# 10l. Smoke: -WhatIf now binds on the entry point (scheduler preview path).
+$null = & $menuScript -ScheduleDays 3 -WhatIf *>&1
+Test-SuiteCheck -Name 'Smoke: Run-Menu -ScheduleDays 3 -WhatIf exits 0 (preview, no registration)' -Pass ($LASTEXITCODE -eq 0)
 
 Write-Host ''
 Write-Host "Results: $($script:Passed) passed, $($script:Failed) failed"

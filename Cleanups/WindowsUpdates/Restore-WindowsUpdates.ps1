@@ -24,11 +24,17 @@ $startTypeMap = @{ 2 = 'Automatic'; 3 = 'Manual'; 4 = 'Disabled' }
 
 # --- Services -----------------------------------------------------------------
 foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Object { $_.Type -eq 'Service' })) {
-    $svc = Get-Service -Name $record.Name -ErrorAction SilentlyContinue
+    $svc = $null
+    try { $svc = Get-Service -Name $record.Name -ErrorAction Stop } catch { $svc = $null }
     if (-not $svc) { Write-Warning "  [svc]     Service '$($record.Name)' not found - skipping"; continue }
 
-    $startType = $startTypeMap[$record.StartType]
-    if (-not $startType) { Write-Warning "  [svc]     Unknown start type '$($record.StartType)' for $($record.Name) - skipping"; continue }
+    # Older backups store StartType as a STRING - cast before the int-keyed map lookup.
+    $st = 0
+    if (-not [int]::TryParse([string]$record.StartType, [ref]$st) -or -not $startTypeMap.ContainsKey($st)) {
+        Write-Warning "  [svc]     Unknown start type '$($record.StartType)' for $($record.Name) - skipping"
+        continue
+    }
+    $startType = $startTypeMap[$st]
 
     if (-not $PSCmdlet.ShouldProcess($record.Name, "Restore start type to $startType")) {
         Write-Host "  [svc]     Would restore: $($record.Name) -> $startType"
@@ -39,7 +45,7 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Obj
         Set-Service -Name $record.Name -StartupType $startType -ErrorAction Stop
         Write-Host "  [svc]     Restored: $($record.Name) -> $startType"
     } catch {
-        Write-Warning "  [svc]     Failed to restore $($record.Name): $($_.Exception.Message)"
+        Write-Error "  [svc]     Failed to restore $($record.Name): $($_.Exception.Message)"
     }
 }
 
@@ -58,7 +64,9 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Obj
 
     try {
         if ($record.OldExists) {
-            Set-ItemProperty -Path $record.Path -Name $record.Name -Value $record.OldValue -ErrorAction Stop
+            # Engine helper restores with the ORIGINAL value kind (OldType, base64 for
+            # Binary) - a bare Set-ItemProperty would lose the type.
+            Restore-WCSRegistryRecordValue -Record $record -ErrorAction Stop
             Write-Host "  [winupdate] Restored: $($record.Path)\$($record.Name) = $($record.OldValue)"
         } elseif ($targetExists) {
             Remove-ItemProperty -Path $record.Path -Name $record.Name -ErrorAction Stop
@@ -67,7 +75,7 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Obj
             Write-Host "  [winupdate] Skipped (already absent): $($record.Path)\$($record.Name)"
         }
     } catch {
-        Write-Warning "  [winupdate] Failed: $($record.Path)\$($record.Name) - $($_.Exception.Message)"
+        Write-Error "  [winupdate] Failed: $($record.Path)\$($record.Name) - $($_.Exception.Message)"
     }
 }
 

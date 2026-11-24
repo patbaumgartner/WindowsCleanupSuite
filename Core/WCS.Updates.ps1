@@ -70,24 +70,31 @@ function Invoke-WCSUpdateManager {
 }
 
 function Invoke-WCSDebloatAfterUpdates {
-    <# Re-runs the menu non-interactively at the given level (removes apps re-installed by updates). #>
+    <# Re-runs the menu non-interactively at the given level (removes apps re-installed by updates).
+       Topics/AllowRisky are forwarded so the re-debloat matches the user's selection
+       instead of silently applying every level-default topic. #>
     param(
         [ValidateSet('Safe', 'Balanced', 'Aggressive', 'Extreme')][string]$Level = 'Extreme',
+        [string[]]$Topics = @(),
+        [switch]$AllowRisky,
         [switch]$Apply
     )
 
     $menu = Join-Path (Split-Path -Parent $PSScriptRoot) 'Runners\Run-Menu.ps1'
     if (-not (Test-Path $menu)) { Write-Error "Run-Menu.ps1 not found at $menu"; return }
+    $extraArgs = @()
+    if ($Topics -and $Topics.Count) { $extraArgs += @('-Topics', ($Topics -join ',')) }
+    if ($AllowRisky) { $extraArgs += '-AllowRisky' }
     Write-Host ''
     Write-Host "Re-debloating after updates (level: $Level)..." -ForegroundColor Cyan
     if ($Apply) {
         if (-not (Test-SuiteIsAdmin)) {
             Write-Warning 'Re-debloating after updates needs Administrator; running preview.'
-            & $menu -NonInteractive -Level $Level
+            & $menu -NonInteractive -Level $Level @extraArgs
         } else {
-            & $menu -NonInteractive -Level $Level -Apply -AutoApprove
+            & $menu -NonInteractive -Level $Level -Apply -AutoApprove @extraArgs
         }
     } else {
-        & $menu -NonInteractive -Level $Level
+        & $menu -NonInteractive -Level $Level @extraArgs
     }
 }

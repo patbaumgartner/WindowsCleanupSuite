@@ -44,7 +44,7 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Obj
             Write-Host "  [priv]    Skipped (already absent): $($record.Path)\$($record.Name)"
         }
     } catch {
-        Write-Warning "  [priv]    Failed to restore $($record.Path)\$($record.Name): $($_.Exception.Message)"
+        Write-Error "  [priv]    Failed to restore $($record.Path)\$($record.Name): $($_.Exception.Message)"
     }
 }
 

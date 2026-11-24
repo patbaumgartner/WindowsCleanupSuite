@@ -24,9 +24,15 @@ param(
     [switch]$Quick
 )
 
+if ($Quick -and -not $WhatIfPreference) {
+    Write-Error '-Quick is a preview-only fast mode and cannot be combined with apply mode. Use -WhatIf or drop -Quick.'
+    exit 1
+}
+
 . (Join-Path $PSScriptRoot '..\..\Core\CleanupEngine.ps1')
 
 $manifest = Get-SuiteManifest -CleanupName 'TempAndJunkFiles'
+$isAdmin  = Test-SuiteIsAdmin
 
 function Resolve-JunkPath {
     param([string]$Path)
@@ -38,12 +44,18 @@ function Remove-JunkContents {
     if (-not (Test-Path $Path)) { return }
     if (-not $PSCmdlet.ShouldProcess($Path, 'Delete junk directory contents')) { Write-Host "  Would clean: $Path"; return }
     try {
-        Get-ChildItem -Path $Path -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host "  Cleaned: $Path"
+        $rmErrors = @()
+        Get-ChildItem -Path $Path -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable +rmErrors
+        if ($rmErrors.Count) { Write-Warning "  Partially cleaned: $Path ($($rmErrors.Count) item(s) failed - locked or access denied)" }
+        else { Write-Host "  Cleaned: $Path" }
     } catch { Write-Warning "  Failed: $Path - $($_.Exception.Message)" }
 }
 
-foreach ($dir in @($manifest.Directories)) { Remove-JunkContents -Path (Resolve-JunkPath $dir) }
+foreach ($dir in @($manifest.Directories)) {
+    $resolved = Resolve-JunkPath $dir
+    if (-not $isAdmin -and $resolved -like "$($env:SystemRoot)\*") { Write-Host "  Skipped (Admin): $resolved"; continue }
+    Remove-JunkContents -Path $resolved
+}
 
 if (@($manifest.FilePatterns).Count) {
     if ($Quick) {
@@ -72,7 +84,9 @@ if (@($manifest.FilePatterns).Count) {
 }
 
 if ($manifest.ClearEventLogs) {
-    if (-not $PSCmdlet.ShouldProcess('Windows Event Logs', 'Clear event logs (wevtutil cl)')) {
+    if (-not $isAdmin) {
+        Write-Host '  Skipped (Admin): clear event logs'
+    } elseif (-not $PSCmdlet.ShouldProcess('Windows Event Logs', 'Clear event logs (wevtutil cl)')) {
         Write-Host '  Would clear event logs'
     } else {
         foreach ($log in @(wevtutil el 2>$null)) { wevtutil cl $log 2>$null | Out-Null }
@@ -95,7 +109,9 @@ if ($manifest.DiskCleanupSagerun) {
 
 # Defragment system drive (enables fast startup-friendly fragmentation levels)
 $defragDrive = $env:SystemDrive
-if ($PSCmdlet.ShouldProcess($defragDrive, 'Defragment drive /O /U (user files only)')) {
+if (-not $isAdmin) {
+    Write-Host "  Skipped (Admin): defragment $defragDrive"
+} elseif ($PSCmdlet.ShouldProcess($defragDrive, 'Defragment drive /O /U (user files only)')) {
     try {
         & cmd /c "defrag $defragDrive /O /U" 2>&1 | Out-Null
         Write-Host "  Defragmented (optimize): $defragDrive"

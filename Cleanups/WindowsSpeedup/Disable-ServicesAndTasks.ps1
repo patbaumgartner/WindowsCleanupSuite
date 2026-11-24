@@ -62,6 +62,11 @@ param(
     [switch]$Quick
 )
 
+if ($Quick -and -not $WhatIfPreference) {
+    Write-Error '-Quick is a preview-only fast mode and cannot be combined with apply mode. Use -WhatIf or drop -Quick.'
+    exit 1
+}
+
 . (Join-Path $PSScriptRoot '..\..\Core\CleanupEngine.ps1')
 
 $manifest   = Get-SuiteManifest -CleanupName 'WindowsSpeedup'
@@ -104,6 +109,10 @@ function Disable-SuiteService {
             Write-Host "  [service] Already absent: $($svc.Name) - $($Entry.Reason)"
             continue
         }
+        if ([int]$start -eq 3) {
+            Write-Host "  [service] Already Manual: $($svc.Name) - $($Entry.Reason)"
+            continue
+        }
 
         if (-not $PSCmdlet.ShouldProcess($svc.Name, "Set start type to Manual ($($Entry.Reason))")) {
             Write-Host "  [service] Would disable: $($svc.Name) - $($Entry.Reason)"
@@ -132,7 +141,7 @@ function Disable-SuiteService {
 
 foreach ($entry in @($manifest.Services)) {
     if (-not (Test-SuiteEntryApplies -Entry $entry -Profile $Profile)) { continue }
-    if (Test-SuiteLoginSafeExcluded -Entry $entry -LoginSafeExclusions $manifest.LoginSafeExclusions) {
+    if ($LoginSafe -and (Test-SuiteLoginSafeExcluded -Entry $entry -LoginSafeExclusions $manifest.LoginSafeExclusions)) {
         Write-Host "  [service] Skipped (LoginSafe): $($entry.Name)"
         continue
     }
@@ -360,10 +369,16 @@ function Disable-SuiteAppModelStartup {
     }
 
     $safeKey = ($Entry.Path -replace '^HKCU:\\', '') -replace '[\\/:*?"<>| ]', '_'
+    # Record value EXISTENCE as well as content: an existing 0 must not be confused
+    # with an absent value, and restore must delete values that were absent before.
+    $hasUserEnabled = $current.PSObject.Properties.Name -contains 'UserEnabledStartupOnce'
+    $hasLastDisabled = $current.PSObject.Properties.Name -contains 'LastDisabledTime'
     New-SuiteBackupFile -BackupRoot $backupRoot -FileName "appmodelstartup_$safeKey.txt" -Record @{
         Type = 'AppModelStartup'; Path = $Entry.Path; Name = $Entry.Name; State = $currentState; Reason = $Entry.Reason
-        UserEnabledStartupOnce = if ($current.UserEnabledStartupOnce) { [string]$current.UserEnabledStartupOnce } else { '' }
-        LastDisabledTime = if ($current.LastDisabledTime) { [string]$current.LastDisabledTime } else { '' }
+        UserEnabledStartupOnce = if ($hasUserEnabled) { [string]$current.UserEnabledStartupOnce } else { '' }
+        UserEnabledStartupOnceExists = [bool]$hasUserEnabled
+        LastDisabledTime = if ($hasLastDisabled) { [string]$current.LastDisabledTime } else { '' }
+        LastDisabledTimeExists = [bool]$hasLastDisabled
     }
 
     try {
@@ -414,10 +429,16 @@ if ($manifest.VisualEffects) {
         $visualBackup = [ordered]@{
             Path = $desktopKey
             VisualFXSetting = if ($desktopProps -and $desktopProps.VisualFXSetting -ne $null) { [string]$desktopProps.VisualFXSetting } else { '' }
+            VisualFXSettingExists = [bool]($desktopProps -and $desktopProps.PSObject.Properties.Name -contains 'VisualFXSetting')
             DragFullWindows = if ($desktopProps -and $desktopProps.DragFullWindows -ne $null) { [string]$desktopProps.DragFullWindows } else { '' }
+            DragFullWindowsExists = [bool]($desktopProps -and $desktopProps.PSObject.Properties.Name -contains 'DragFullWindows')
             FontSmoothing = if ($desktopProps -and $desktopProps.FontSmoothing -ne $null) { [string]$desktopProps.FontSmoothing } else { '' }
+            FontSmoothingExists = [bool]($desktopProps -and $desktopProps.PSObject.Properties.Name -contains 'FontSmoothing')
         }
-        Set-Content -Path $visualBackupFile -Value (ConvertTo-Json -InputObject $visualBackup -Depth 2) -Encoding UTF8
+        # Preserve the ORIGINAL visual-effects backup across repeated runs.
+        if (-not (Test-Path $visualBackupFile)) {
+            Set-Content -Path $visualBackupFile -Value (ConvertTo-Json -InputObject $visualBackup -Depth 2) -Encoding UTF8
+        }
         Set-ItemProperty -Path $desktopKey -Name 'VisualFXSetting' -Value 3 -Type DWord
         Set-ItemProperty -Path $desktopKey -Name 'DragFullWindows' -Value 0 -Type String
         Set-ItemProperty -Path $desktopKey -Name 'FontSmoothing' -Value 2 -Type String

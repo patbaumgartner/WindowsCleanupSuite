@@ -37,6 +37,19 @@ jobs:
           }
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8
 
+      - name: Validate before packaging (structural tests)
+        shell: pwsh
+        run: pwsh -NoProfile -File Tests\Invoke-SuiteTests.ps1
+
+      - name: Validate before packaging (Windows PowerShell 5.1 parser)
+        shell: pwsh
+        run: |
+          $ps51 = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          if (Test-Path $ps51) {
+            & $ps51 -NoProfile -ExecutionPolicy Bypass -File Tests\Invoke-PS51ParseCheck.ps1
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+
       - name: Build zip + SHA256 checksums
         id: build
         shell: pwsh

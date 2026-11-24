@@ -17,6 +17,11 @@ param()
 
 $backupRoot = Get-SuiteBackupRoot -CleanupName 'Network'
 
+if (-not (Test-SuiteIsAdmin) -and -not $WhatIfPreference) {
+    Write-Warning 'Restore-Network: HKLM/service/DNS changes require Administrator; nothing was applied.'
+    return
+}
+
 # Registry values and service start types.
 Restore-SuiteRegistryRecords -BackupRoot $backupRoot -Preview:$WhatIfPreference
 Restore-SuiteServiceRecords -BackupRoot $backupRoot -Preview:$WhatIfPreference
@@ -29,7 +34,17 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Obj
         continue
     }
     try {
-        if ($record.WasDhcp) {
+        # Newer backups record WasStaticDns (DNS itself statically assigned - independent
+        # of whether the IPv4 address came from DHCP). Honor it so manually configured
+        # resolvers on a DHCP interface are never discarded.
+        $hasStaticFlag = $record.PSObject.Properties.Name -contains 'WasStaticDns'
+        if ($hasStaticFlag) {
+            if ($record.WasStaticDns -and @($record.PreviousServers).Count) {
+                Set-DnsClientServerAddress -InterfaceIndex $record.InterfaceIndex -ServerAddresses @($record.PreviousServers) -ErrorAction Stop
+            } else {
+                Set-DnsClientServerAddress -InterfaceIndex $record.InterfaceIndex -ResetServerAddresses -ErrorAction Stop
+            }
+        } elseif ($record.WasDhcp) {
             Set-DnsClientServerAddress -InterfaceIndex $record.InterfaceIndex -ResetServerAddresses -ErrorAction Stop
         } elseif (@($record.PreviousServers).Count) {
             Set-DnsClientServerAddress -InterfaceIndex $record.InterfaceIndex -ServerAddresses @($record.PreviousServers) -ErrorAction Stop
@@ -38,7 +53,7 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Obj
         }
         Write-Host "  [dns]     Restored DNS on '$($record.InterfaceAlias)'"
     } catch {
-        Write-Warning "  [dns]     Restore failed on '$($record.InterfaceAlias)': $($_.Exception.Message)"
+        Write-Error "  [dns]     Restore failed on '$($record.InterfaceAlias)': $($_.Exception.Message)"
     }
 }
 

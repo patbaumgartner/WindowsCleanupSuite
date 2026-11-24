@@ -22,13 +22,16 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Obj
     try {
         if (-not (Test-Path $record.RegistryKey)) { New-Item -Path $record.RegistryKey -Force | Out-Null }
         if ($record.HadPrevious -and $null -ne $record.PreviousValue) {
-            $type = if ($record.ValueType) { $record.ValueType } else { 'DWord' }
+            # Prefer the OLD value's recorded kind; ValueType is the NEW kind (fallback only).
+            $type = 'DWord'
+            if ($record.PSObject.Properties.Name -contains 'PreviousType' -and $record.PreviousType) { $type = [string]$record.PreviousType }
+            elseif ($record.ValueType) { $type = [string]$record.ValueType }
             Set-ItemProperty -Path $record.RegistryKey -Name $record.Name -Value $record.PreviousValue -Type $type -ErrorAction Stop
         } else {
             Remove-ItemProperty -Path $record.RegistryKey -Name $record.Name -ErrorAction SilentlyContinue
         }
         Write-Host "  Restored: $($record.RegistryKey)\$($record.Name)"
     } catch {
-        Write-Warning "  Restore failed: $($record.RegistryKey)\$($record.Name) - $($_.Exception.Message)"
+        Write-Error "  Restore failed: $($record.RegistryKey)\$($record.Name) - $($_.Exception.Message)"
     }
 }

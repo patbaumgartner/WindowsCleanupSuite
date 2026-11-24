@@ -25,7 +25,8 @@
         '%SYSTEMDRIVE%\AMD',
         '%SYSTEMDRIVE%\NVIDIA',
         '%SYSTEMDRIVE%\INTEL',
-        '%PROGRAMDATA%\Package Cache',
+        # NOTE: '%PROGRAMDATA%\Package Cache' is deliberately NOT cleaned - it holds
+        # installer payloads required to repair/update/uninstall installed products.
         '%PROGRAMDATA%\Microsoft\Windows\WER\Temp',
         '%LOCALAPPDATA%\Microsoft\Windows\PowerShell\PSReadLine',
         # --- 2025 additions (Chainski WindowsCleanerUtility + Marvin700 extras) ---

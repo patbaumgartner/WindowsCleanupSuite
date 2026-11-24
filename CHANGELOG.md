@@ -16,6 +16,8 @@ project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-24 - parallel previews, quick mode, scheduler prefs, backup review
+
 ### Added
 - **Parallel previews** — in preview mode (`-WhatIf`) the topic scans now run concurrently in a
   Windows PowerShell 5.1-compatible runspace pool instead of one-after-another. Escape hatches:
@@ -43,6 +45,60 @@ project adheres to [Semantic Versioning](https://semver.org/) (`1.x` era; 1.0.0 
 - **Tests** — `Tests\Invoke-SuiteTests.ps1` section 9 covers the parallel runner (runspace pool,
   fallbacks), `-Quick` dispatch and per-cleanup quick paths, the scheduler (`AutoReRunDays`
   resolution, task command line, `-WhatIf` register/unregister, admin gate) and the review tool.
+
+### Fixed (deep-review hardening, full-suite + real-machine verified)
+
+- **Preview safety (AppX)**: UWP and provisioned-package removals are now `$PSCmdlet.ShouldProcess`-gated
+  (`Remove-AppxPackage`/`Remove-AppxProvisionedPackage` have no usable `-WhatIf`) - a preview can no
+  longer remove apps. Provisioned scan is PS 5.1-compatible (`Get-AppxProvisionedPackage` has no
+  `-AllUsers`), removes by `PackageName` (not `DisplayName`), records `PackageName` in backups, and
+  the restore explicitly lists provisioned records as not auto-restorable (Store reinstall).
+- **Original backups are never overwritten** (`New-SuiteBackupFile` + visual-effects backup): repeated
+  runs (incl. scheduled re-runs) used to replace the original state with the already-debloated state,
+  breaking restore. Registry values/service start types that already match the target are skipped.
+- **Restore fidelity**: generic registry records capture `PreviousType` (old value kind) and restores
+  prefer it (`Restore-SuiteRegistryRecords`, `Tools\Restore-WCSBackup.ps1`, `Restore-WindowsAI.ps1`);
+  `Restore-WindowsUpdates.ps1` uses the type-preserving engine helper; scheduled-task restore prefers
+  the recorded `Enabled` flag over lossy `State`; AppModel startup backups record value existence and
+  restore `LastDisabledTime` as QWORD; visual-effects restore removes originally-absent values;
+  `Set-WCSRegistryEntry` records `NewValue` so the review tool shows `old -> new` correctly.
+- **PowerPlan**: activates the GUID returned by `powercfg -duplicatescheme` (previously activated the
+  SOURCE scheme), records previous active scheme + hibernation state (`powerplan_state.json`), checks
+  powercfg exit codes, and restore reactivates the previous scheme and hibernation ON/OFF.
+- **Network/DNS**: backups record `WasStaticDns` (static DNS via the interface `NameServer` value, not
+  the IPv4 DHCP state) - restore no longer discards manually configured DNS on DHCP interfaces.
+- **TempAndJunkFiles**: `%PROGRAMDATA%\Package Cache` removed from junk targets (installer payloads
+  needed for repair/uninstall); system dirs/event logs/defrag are admin-gated; partial deletions are
+  reported as warnings instead of "Cleaned".
+- **Admin gating**: interactive action 2 was missing the admin check (partial apply); Network/
+  InstalledSoftware/PowerPlan restores and PowerPlan hibernate-off are gated; `Check-SystemHealth`
+  repair steps (DISM RestoreHealth, sfc) are hard admin-gated (ScanHealth stays read-only).
+- **Apply safety**: `-Apply` requires a typed YES confirmation unless `-AutoApprove` (automation and
+  the scheduled task already pass it), and aborts when no System Restore point can be created instead
+  of applying without a safety net; a missing selected cleanup script aborts the run (no partial apply).
+- **Honest exit codes**: the sequential runner captures non-terminating errors (`-ErrorVariable`),
+  engine mutation/restore failures now emit `Write-Error`, `Restore-SuiteServiceRecords` no longer
+  prints "Restored" after a failed `Set-Service`, and `Tools\Restore-WCSBackup.ps1` propagates
+  per-record failures to its exit code. Restore is single-owner (generic pass covers only orphan
+  folders - records were previously restored twice), and its RestorePoint mode reads
+  `$WhatIfPreference` (the `$WhatIf` variable does not exist).
+- **Scheduler hardening**: SYSTEM task prefers the machine-wide System32 Windows PowerShell (not a
+  user-writable pwsh), runs with `-NoProfile -ExecutionPolicy Bypass` (unsigned scripts on Restricted/
+  AllSigned machines), validates stored Level/Topics against the catalog (no argument injection from
+  preferences), refuses registration when the prefs file exists but is unreadable (no silent
+  `-Level 4` fallback), and `-ScheduleDays` now works with `-WhatIf` (both entry scripts support it).
+- **Updates**: post-update re-debloat forwards the user's Topics/AllowRisky instead of applying every
+  level-default topic. Preferences are written atomically (temp file + replace).
+- **Launcher**: preserves `Backups`/`Config`/`Logs` across re-runs (migrates them into the fresh
+  extraction), refuses to wipe directories that are not a previous suite installation, sanitizes
+  archive file names (branch slashes, URL query/fragment), and extract-only mode exits 1 when no
+  menu was extracted. `Audit-State` compares task `PathPattern` with `-like`; `New-WCSZip` uses
+  `-LiteralPath`.
+- **CI/release**: the structural suite now also runs under the Windows PowerShell 5.1 runtime,
+  snapshot `.zip.SHA256` files are uploaded with the artifact, and the release workflow runs the
+  test suite + 5.1 parse check before packaging. Tests: new section 10 regression checks for all of
+  the above; the scheduler WhatIf test injects preferences (hermetic); the zip self-exclusion test
+  actually inspects archive entries.
 
 ### Fixed
 - **Apply mode crashed with `The term 'if' is not recognized`** in every cleanup using
