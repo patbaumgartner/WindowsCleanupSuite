@@ -1,14 +1,6 @@
 # Changelog
 
 All notable changes to WindowsCleanupSuite will be documented in this file.
-
-## [1.0.0] - 2026-11-21 - self-executing launcher
-
-- **Launcher.ps1** — self-executing, curl-friendly download-and-run (the Raphire/Win11Debloat
-  style): `irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 | iex`
-  fetches the latest GitHub Release zip, extracts it to `%TEMP%\WindowsCleanupSuite` and launches the menu.
-  (GitHub API unavailable from this sandbox - verified: curl.exe to api.github.com fails.)
-
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [1.2.1] - 2026-11-24 - hotfix: updates + re-debloat argument binding
@@ -205,7 +197,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `Tests\Invoke-SuiteTests.ps1`: covers the new cleanups, `Restore-All.ps1`, `Perf-Snapshot.ps1`, plus wiring drift checks (runner steps, engine order, restore coverage, `-AllowRisky` gating).
 - Extension manifests: DNSReset TCP tuning (RSS off, autotuning restricted), TempAndJunkFiles Disk Cleanup sagerun + Chrome caches + defrag, PowerPlan hibernate off.
 
-## [1.0.0] - 2026-11-21
+## [1.0.0] - 2026-11-21 - self-executing launcher
+
+- **Launcher.ps1** — self-executing, curl-friendly download-and-run (the Raphire/Win11Debloat
+  style): `irm https://raw.githubusercontent.com/patbaumgartner/WindowsCleanupSuite/main/Launcher.ps1 | iex`
+  fetches the latest GitHub Release zip, extracts it to `%TEMP%\WindowsCleanupSuite` and launches the menu.
+  (GitHub API unavailable from this sandbox - verified: curl.exe to api.github.com fails.)
 
 ### Added
 
