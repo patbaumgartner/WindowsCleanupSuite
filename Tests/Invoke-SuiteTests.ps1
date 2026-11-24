@@ -681,6 +681,17 @@ $zipHelperText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Tools\New-WCSZip.
 Test-SuiteCheck -Name 'New-WCSZip: LiteralPath for wildcard-safe source handling' -Pass (
     ($zipHelperText -match 'Resolve-Path -LiteralPath') -and ($zipHelperText -match 'Get-ChildItem -LiteralPath'))
 
+# 10m. Updates: per-package (-PackageIds) and --force winget support.
+# (README documents Invoke-WCSUpdateManager -PackageIds/-Force/-IncludeUnknown.)
+$updatesText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Core\WCS.Updates.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Updates: -PackageIds/-Force/-IncludeUnknown supported, --include-unknown in default winget cmd' -Pass (
+    ($updatesText -match '\[string\[\]\]\$PackageIds = @\(\)\)') -and
+    ($updatesText -match '\[switch\]\$Force') -and
+    ($updatesText -match '\[switch\]\$IncludeUnknown') -and
+    ($updatesText -match "'--include-unknown'") -and
+    ($updatesText -match '--force') -and
+    ($updatesText -match '--id.*\$id'))
+
 # 10l. Smoke: -WhatIf now binds on the entry point (scheduler preview path).
 $null = & $menuScript -ScheduleDays 3 -WhatIf *>&1
 Test-SuiteCheck -Name 'Smoke: Run-Menu -ScheduleDays 3 -WhatIf exits 0 (preview, no registration)' -Pass ($LASTEXITCODE -eq 0)

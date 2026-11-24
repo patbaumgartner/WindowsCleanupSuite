@@ -187,6 +187,14 @@ Logs for updates: `Logs\updates-*.log`.
 
 ---
 
+Update with specific packages (e.g. `winget upgrade --id Discord.Discord --force`):
+
+```powershell
+Invoke-WCSUpdateManager -PackageIds @('Discord.Discord') -Force   # winget: --id + --force per package
+Invoke-WCSUpdateManager -PackageIds @('Telegram.TelegramDesktop') # no --force
+Invoke-WCSUpdateManager -IncludeUnknown                            # --include-unknown (default for winget)
+```
+
 ## 🕒 Scheduled Re-runs
 
 One command registers a scheduled task so the machine gets re-debloated automatically:

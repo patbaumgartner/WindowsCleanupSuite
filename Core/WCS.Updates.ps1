@@ -7,6 +7,8 @@
     Features:
       - Detects available update managers (winget.exe / choco.exe / none).
       - Runs "winget upgrade --all" or "choco upgrade all" silently with logs.
+      - Optional: upgrade specific packages only with -PackageIds (e.g. winget -Force support)
+        or include unknown versions with -IncludeUnknown (the default for winget).
       - Re-debloats afterwards via Runners\Run-Menu.ps1 -NonInteractive -Apply (removes
         apps that updates reinstalled, e.g. wifi kill apps, and repairs update-side bloat).
     All commands are logged to Logs\updates-*.log with timestamps.
@@ -24,9 +26,14 @@ function Get-WCSActiveUpdateManager {
 function Invoke-WCSUpdateManager {
     <#
         Runs the detected update manager (applies updates immediately).
+        -PackageIds upgrades only the given IDs (winget: --id <Id> --force with -Force).
         Returns hashtable: @{ Manager; Success; ExitCode; Output }
     #>
-    param()
+    param(
+        [string[]]$PackageIds = @(),
+        [switch]$Force,
+        [switch]$IncludeUnknown
+    )
 
     $manager = Get-WCSActiveUpdateManager
     $root = Split-Path -Parent $PSScriptRoot
@@ -41,9 +48,26 @@ function Invoke-WCSUpdateManager {
 
     Write-Host "Running updates via $manager..." -ForegroundColor Cyan
     $cmd = switch ($manager) {
-        'winget' { @('upgrade', '--all', '--silent', '--accept-source-agreements', '--accept-package-agreements', '--include-unknown') }
-        'choco'  { @('upgrade', 'all', '-y') }
+        'winget' {
+            $base = @('upgrade', '--silent', '--accept-source-agreements', '--accept-package-agreements')
+            if ($PackageIds -and $PackageIds.Count) {
+                $all = @()
+                foreach ($id in $PackageIds) { $all += @('--id', $id) }
+                if ($Force) { $all += '--force' }
+                $base + $all
+            } else {
+                $cmds = $base + @('--all')
+                if ($IncludeUnknown) { $cmds += '--include-unknown' }
+                $cmds
+            }
+        }
+        'choco'  {
+            if ($PackageIds -and $PackageIds.Count) { @('upgrade') + $PackageIds + '-y' }
+            else { @('upgrade', 'all', '-y') }
+        }
+        default { @('upgrade', '--all') }
     }
+    Write-Host "  Command: $manager $($cmd -join ' ')" -ForegroundColor Gray
 
     $result = [pscustomobject]@{ Manager = $manager; Success = $false; ExitCode = 0; Output = '' }
     try {
