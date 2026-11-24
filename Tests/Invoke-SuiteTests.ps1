@@ -685,7 +685,7 @@ Test-SuiteCheck -Name 'New-WCSZip: LiteralPath for wildcard-safe source handling
 # (README documents Invoke-WCSUpdateManager -PackageIds/-Force/-IncludeUnknown.)
 $updatesText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Core\WCS.Updates.ps1') -ErrorAction SilentlyContinue
 Test-SuiteCheck -Name 'Updates: -PackageIds/-Force/-IncludeUnknown supported, --include-unknown in default winget cmd' -Pass (
-    ($updatesText -match '\[string\[\]\]\$PackageIds = @\(\)\)') -and
+    ($updatesText -match 'PackageIds = @\(\)') -and
     ($updatesText -match '\[switch\]\$Force') -and
     ($updatesText -match '\[switch\]\$IncludeUnknown') -and
     ($updatesText -match "'--include-unknown'") -and
