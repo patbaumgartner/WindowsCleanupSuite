@@ -47,7 +47,7 @@ Walk through:
    - **Extreme** — Maximum + ExtremeExtras (WpnUserService, StoreBroker, etc.).
 2. **Choose Topics** — toggle the areas you want (spaces/numbers/[a]ll/[n]one, Enter to accept).
 3. **Preview** — see what would change (WhatIf).
-4. **Apply** — System Restore point is created, then changes are applied (needs Admin).
+4. **Apply** — System Restore point is created (Admin required), then changes are applied after a typed **YES** confirmation (skipped with `-AutoApprove`). The run aborts if no restore point can be created.
 5. **Actions menu** — `[1]` preview / `[2]` apply / `[3]` updates+re-debloat / `[4]` schedule re-run / `[5]` review backup records then restore / `[6]` audits / `[h]` help / `[0]` exit.
 
 Everything is colored, numbered and stable — invalid input is retried instead of crashing.
@@ -114,14 +114,16 @@ Perfect for scripts/CI:
 `-MaxParallel` default 4; `-NoParallel` forces the old sequential order; `-Apply` is always
 sequential). `-Quick` makes the three heaviest topics (InstalledSoftware, TempAndJunkFiles,
 ServicesAndTasks) topic-only: single-pass uninstall index, no recursive junk-file scan, exact
-service/task probes. A full Level 2 preview takes ~2.8 min parallel vs ~8 min sequential.
+service/task probes. Measured on the dev machine (Win 11, non-admin): full Level 2 preview
+exits 0 in **~2.9× faster than sequential** (parallel ~166s vs sequential ~476s; ~132s once
+already-done operations are skipped).
 
 **Topic names:** `ServicesTasks`, `PrivacySettings`, `Privacy`, `Browsers`, `Network`, `AI`,
 `OneDrive`, `ExtremeExtras`, `Maintenance`, `DNS`, `WindowsUpdates`, `PowerPlan`.
 
 ### Direct scripts (audits & single cleanups)
 
-`Runners\Run-Menu.ps1` is the only entry point — there are no legacy runners anymore.
+Entry points: `Launcher.ps1` (one-liner) or `Runners\Run-Menu.ps1` — there are no legacy runners anymore.
 Individual scripts still work standalone (all cleanups support `-WhatIf`):
 
 ```powershell
