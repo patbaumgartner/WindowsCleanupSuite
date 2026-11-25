@@ -11,10 +11,13 @@
         them on demand; every original start type is backed up before changing.
       - Scheduled tasks are disabled (backed up first).
       - OneDrive/Microsoft Lists Run autoruns and StartupApproved startup apps
-        are removed/disabled (backed up first).
-      - AppModel startup tasks (Phone Link, WhatsApp, Teams, CrossDevice) are
-        disabled (backed up first).
-      - Already-running heavy/background apps are stopped.
+        are removed/disabled (backed up first), including the per-user Run32
+        overlay that toggles 32-bit HKLM Run entries such as Dropbox.
+      - AppModel startup tasks are discovered from the installed package manifests
+        (Task IDs change with updates, e.g. WhatsApp uses a GUID) and disabled.
+      - Startup/versioned app updater tasks are matched by their executable path.
+      - Already-running heavy/background apps and already-Manual but still-running
+        services are stopped.
       - Visual effects are set to best-performance (font smoothing kept).
 
     Protected components (Intel Driver & Support Assistant, DSA tasks, etc.) are
@@ -28,8 +31,9 @@
     Optimization strictness: Balanced (safe) or Maximum (aggressive).
 
 .PARAMETER LoginSafe
-    Keeps login/session-critical components enabled: OneDrive run entries,
-    csc_vpnagent, CtxsDPS, CWAUpdaterService, WSearch.
+    Keeps login/session-critical *services* enabled: csc_vpnagent, CtxsDPS,
+    CWAUpdaterService, WSearch. OneDrive auto-start is always disabled (manual
+    launch and local files still work).
 
 .PARAMETER SkipProcessStops
     Skips stopping already-running user applications at the end of the run.
@@ -109,31 +113,43 @@ function Disable-SuiteService {
             Write-Host "  [service] Already absent: $($svc.Name) - $($Entry.Reason)"
             continue
         }
-        if ([int]$start -eq 3) {
+
+        $alreadyManual = ([int]$start -eq 3)
+        $isRunning = ($svc.Status -eq 'Running')
+        if ($alreadyManual -and -not $isRunning) {
             Write-Host "  [service] Already Manual: $($svc.Name) - $($Entry.Reason)"
             continue
         }
 
-        if (-not $PSCmdlet.ShouldProcess($svc.Name, "Set start type to Manual ($($Entry.Reason))")) {
+        if (-not $PSCmdlet.ShouldProcess($svc.Name, "Set start type to Manual and stop ($($Entry.Reason))")) {
             Write-Host "  [service] Would disable: $($svc.Name) - $($Entry.Reason)"
             continue
         }
 
-        New-SuiteBackupFile -BackupRoot $backupRoot -FileName "svc_$($svc.Name).txt" -Record @{
-            Type = 'Service'; Name = $svc.Name; StartType = [int]$start; Reason = $Entry.Reason
+        if (-not $alreadyManual) {
+            New-SuiteBackupFile -BackupRoot $backupRoot -FileName "svc_$($svc.Name).txt" -Record @{
+                Type = 'Service'; Name = $svc.Name; StartType = [int]$start; Reason = $Entry.Reason
+            }
+            try {
+                Set-Service -Name $svc.Name -StartupType Manual -ErrorAction Stop
+                Write-Host "  [service] Disabled: $($svc.Name) - $($Entry.Reason)"
+            } catch {
+                try {
+                    Set-ItemProperty -Path $regPath -Name 'Start' -Value 3 -Type DWord -ErrorAction Stop
+                    Write-Host "  [service] Disabled via registry: $($svc.Name) - $($Entry.Reason)"
+                } catch {
+                    Write-Warning "  [service] Failed to change $($svc.Name): $($_.Exception.Message)"
+                }
+            }
         }
 
-        try {
-            Set-Service -Name $svc.Name -StartupType Manual -ErrorAction Stop
-            if ($svc.Status -eq 'Running') { Stop-Service -Name $svc.Name -Force -ErrorAction SilentlyContinue }
-            Write-Host "  [service] Disabled: $($svc.Name) - $($Entry.Reason)"
-        } catch {
+        # Manual alone does not stop a service that is already running this session.
+        if ($isRunning) {
             try {
-                Set-ItemProperty -Path $regPath -Name 'Start' -Value 3 -Type DWord -ErrorAction Stop
-                if ($svc.Status -eq 'Running') { Stop-Service -Name $svc.Name -Force -ErrorAction SilentlyContinue }
-                Write-Host "  [service] Disabled via registry: $($svc.Name) - $($Entry.Reason)"
+                Stop-Service -Name $svc.Name -Force -ErrorAction Stop
+                Write-Host "  [service] Stopped running service: $($svc.Name)"
             } catch {
-                Write-Warning "  [service] Failed to change $($svc.Name): $($_.Exception.Message)"
+                Write-Warning "  [service] Failed to stop $($svc.Name): $($_.Exception.Message)"
             }
         }
     }
@@ -211,23 +227,41 @@ foreach ($entry in @($manifest.Tasks)) {
     Disable-SuiteScheduledTask -Entry $entry
 }
 
-# OneDrive background/update/startup tasks (names vary by SID).
-if (-not $LoginSafe) {
-    if ($Quick) {
-        Write-Host '  [task]    Skipped OneDrive pattern scan (-Quick)'
-    } else {
-        $oneDriveTasks = @(Get-SuiteCachedTasks |
-            Where-Object {
-                $_.TaskName -eq 'OneDrive Per-Machine Standalone Update Task' -or
-                $_.TaskName -like 'OneDrive Reporting Task-*' -or
-                $_.TaskName -like 'OneDrive Startup Task-*'
-            })
-        foreach ($task in $oneDriveTasks) {
-            Disable-SuiteScheduledTask -Entry ([pscustomobject]@{ Path = $task.TaskPath; Name = $task.TaskName; Reason = 'OneDrive background/update task' })
+# OneDrive background/update/startup tasks (names vary by SID). These launch
+# OneDrive even when its Run value is disabled, so LoginSafe never protects them.
+if ($Quick) {
+    Write-Host '  [task]    Skipped OneDrive pattern scan (-Quick)'
+} else {
+    $oneDriveTasks = @(Get-SuiteCachedTasks |
+        Where-Object {
+            $_.TaskName -eq 'OneDrive Per-Machine Standalone Update Task' -or
+            $_.TaskName -like 'OneDrive Reporting Task-*' -or
+            $_.TaskName -like 'OneDrive Startup Task-*'
+        })
+    foreach ($task in $oneDriveTasks) {
+        Disable-SuiteScheduledTask -Entry ([pscustomobject]@{ Path = $task.TaskPath; Name = $task.TaskName; Reason = 'OneDrive background/update task' })
+    }
+}
+
+# Versioned updater tasks: match by the executable they run, not by task name.
+if ($Quick) {
+    Write-Host '  [task]    Skipped app executable task scan (-Quick)'
+} elseif (@($manifest.TaskActionPatterns).Count -gt 0) {
+    $seenTasks = @{}
+    foreach ($task in @(Get-SuiteCachedTasks)) {
+        $exe = @($task.Actions | ForEach-Object { [string]$_.Execute }) -join ' '
+        foreach ($pattern in @($manifest.TaskActionPatterns)) {
+            if ($exe -like "*$($pattern.Pattern)*") {
+                $key = "$($task.TaskPath)$($task.TaskName)"
+                if ($seenTasks.ContainsKey($key)) { break }
+                $seenTasks[$key] = $true
+                Disable-SuiteScheduledTask -Entry ([pscustomobject]@{
+                    Path = $task.TaskPath; Name = $task.TaskName; Reason = $pattern.Reason
+                })
+                break
+            }
         }
     }
-} else {
-    Write-Host '  [task]    Skipped OneDrive scheduled task changes (LoginSafe)'
 }
 
 function Disable-SuiteRunAutorun {
@@ -277,15 +311,19 @@ function Disable-SuiteRunAutorun {
 }
 
 foreach ($entry in @($manifest.RunAutoruns)) {
-    if ($LoginSafe -and $entry.ExcludeWhenLoginSafe) {
-        Write-Host "  [startup] Skipped OneDrive Run autorun (LoginSafe): $($entry.Name)"
-        continue
-    }
+    # LoginSafe protects login-critical *services* only. OneDrive/Microsoft.Lists
+    # auto-start is always removed: the files stay local and OneDrive can still
+    # be launched manually from the Start menu.
     Disable-SuiteRunAutorun -Entry $entry
 }
 
 function Disable-SuiteStartupApproved {
     param([psobject]$Entry)
+
+    if ($Entry.Path -like 'HKLM:*' -and -not $isAdmin) {
+        Write-Host "  [startup] Skipped StartupApproved key $($Entry.Path) (requires elevation)"
+        return
+    }
 
     $names = @()
     if ($Entry.NamePattern) {
@@ -297,38 +335,34 @@ function Disable-SuiteStartupApproved {
     }
 
     foreach ($name in $names) {
+        if ([string]::IsNullOrWhiteSpace($name)) { continue }
         if (Test-SuiteIsProtected -Name $name -Manifest $manifest) {
             Write-Host "  [startup] Skipped (Protected): $name"
             continue
         }
-        if (-not (Test-Path $Entry.Path)) {
-            Write-Host "  [startup] Already absent: $name (path not found)"
+
+        # Get-ItemProperty | Select-Object would turn REG_BINARY into Object[] on
+        # PS 5.1, making the byte[] check fail for every entry. Use the provider.
+        $currentValue = Get-WCSRegistryBinaryValue -Path $Entry.Path -Name $name
+        if ($null -ne $currentValue -and -not (Test-WCSStartupDisabledFlag -Value $currentValue)) {
+            Write-Host "  [startup] Already disabled: $name"
             continue
         }
 
-        try {
-            $currentValue = Get-ItemProperty -Path $Entry.Path -Name $name -ErrorAction Stop |
-                Select-Object -ExpandProperty $name -ErrorAction SilentlyContinue
-        } catch { $currentValue = $null }
-        if ($null -eq $currentValue -or -not ($currentValue -is [byte[]])) {
-            Write-Host "  [startup] Skipped: $name (value is not a binary StartupApproved flag)"
-            continue
-        }
-
-        if (-not $PSCmdlet.ShouldProcess($name, "Disable startup app")) {
+        if (-not $PSCmdlet.ShouldProcess($name, 'Disable startup app')) {
             Write-Host "  [startup] Would disable: $name"
             continue
         }
 
-        New-SuiteBackupFile -BackupRoot $backupRoot -FileName "startupapproved_$(Get-SuiteSafeFileName $name).txt" -Record @{
+        New-SuiteBackupFile -BackupRoot $backupRoot -FileName "startupapproved_$(Get-SuiteSafeFileName $Entry.Path)_$(Get-SuiteSafeFileName $name).txt" -Record @{
             Type = 'StartupApproved'; Path = $Entry.Path; Name = $name
-            ValueBase64 = [Convert]::ToBase64String($currentValue); Reason = $Entry.Reason
+            ValueBase64 = if ($null -eq $currentValue) { '' } else { [Convert]::ToBase64String($currentValue) }
+            Existed = ($null -ne $currentValue); Reason = $Entry.Reason
         }
 
         try {
-            $disabledValue = New-Object byte[]($currentValue.Length)
-            if ($disabledValue.Length -gt 0) { $disabledValue[0] = 3 }
-            Set-ItemProperty -Path $Entry.Path -Name $name -Value $disabledValue -Type Binary -ErrorAction Stop
+            if (-not (Test-Path $Entry.Path)) { New-Item -Path $Entry.Path -Force | Out-Null }
+            Set-ItemProperty -Path $Entry.Path -Name $name -Value (New-WCSStartupDisabledFlag -Existing $currentValue) -Type Binary -ErrorAction Stop
             Write-Host "  [startup] Disabled: $name - $($Entry.Reason)"
         } catch {
             Write-Warning "  [startup] Failed to disable startup app $name - $($_.Exception.Message)"
@@ -340,41 +374,76 @@ foreach ($entry in @($manifest.StartupApproved)) {
     Disable-SuiteStartupApproved -Entry $entry
 }
 
+function Get-WCSPackagedStartupTasks {
+    # Read the CURRENT TaskId from each installed package manifest. Task IDs are
+    # frequently GUIDs and change on update (WhatsApp, for example), so static
+    # registry paths silently stop working after an app update.
+    $found = @()
+    foreach ($pkg in @(Get-AppxPackage -ErrorAction SilentlyContinue)) {
+        $pkgManifest = $null
+        try { $pkgManifest = $pkg | Get-AppxPackageManifest -ErrorAction Stop } catch { continue }
+        if ($null -eq $pkgManifest) { continue }
+        $extensions = @()
+        try { $extensions = @($pkgManifest.Package.Applications.Application.Extensions.Extension) } catch { $extensions = @() }
+        foreach ($ext in $extensions) {
+            if ($null -eq $ext -or $ext.Category -ne 'windows.startupTask') { continue }
+            $startupTask = $ext.StartupTask
+            if ($null -eq $startupTask -or -not $startupTask.TaskId) { continue }
+            $taskId = [string]$startupTask.TaskId
+            $found += [pscustomobject]@{
+                PackageFamilyName = [string]$pkg.PackageFamilyName
+                TaskId            = $taskId
+                Path              = "HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData\$($pkg.PackageFamilyName)\$taskId"
+            }
+        }
+    }
+    return $found
+}
+
 function Disable-SuiteAppModelStartup {
     param([psobject]$Entry)
 
-    if (-not (Test-Path $Entry.Path)) {
+    $taskPath = [string]$Entry.Path
+    $taskName = if ($Entry.Name) { [string]$Entry.Name } else { 'State' }
+    $disableValue = if ($null -ne $Entry.DisableValue) { [int]$Entry.DisableValue } else { 1 }
+
+    if (-not (Test-Path $taskPath)) {
         Write-Host "  [startup] Already absent: $($Entry.Reason)"
         return
     }
 
     $current = $null
     try {
-        $current = Get-ItemProperty -Path $Entry.Path -ErrorAction Stop
+        $current = Get-ItemProperty -Path $taskPath -ErrorAction Stop
     } catch {
         Write-Warning "  [startup] Skipping app-model startup task '$($Entry.Reason)': unable to read state"
         return
     }
 
-    $currentState = $current | Select-Object -ExpandProperty $Entry.Name -ErrorAction SilentlyContinue
+    $currentState = $current.($taskName)
     if ($null -eq $currentState) {
-        Write-Warning "  [startup] Skipping app-model startup task '$($Entry.Reason)': '$($Entry.Name)' state not found"
+        Write-Host "  [startup] Already absent: $($Entry.Reason) (no $taskName value)"
         return
     }
     $currentState = [int]$currentState
+    # State 1 = DisabledByUser; 0 = Disabled; 2 = Enabled (WinRT StartupTaskState).
+    if ($currentState -eq 0 -or $currentState -eq 1 -or $currentState -eq 3) {
+        Write-Host "  [startup] Already disabled: $($Entry.Reason)"
+        return
+    }
 
-    if (-not $PSCmdlet.ShouldProcess($Entry.Reason, 'Disable app-model startup task')) {
+    if (-not $PSCmdlet.ShouldProcess($taskPath, 'Disable app-model startup task')) {
         Write-Host "  [startup] Would disable app-model startup task: $($Entry.Reason)"
         return
     }
 
-    $safeKey = ($Entry.Path -replace '^HKCU:\\', '') -replace '[\\/:*?"<>| ]', '_'
+    $safeKey = ($taskPath -replace '^HKCU:\\', '') -replace '[\\/:*?"<>| ]', '_'
     # Record value EXISTENCE as well as content: an existing 0 must not be confused
     # with an absent value, and restore must delete values that were absent before.
     $hasUserEnabled = $current.PSObject.Properties.Name -contains 'UserEnabledStartupOnce'
     $hasLastDisabled = $current.PSObject.Properties.Name -contains 'LastDisabledTime'
     New-SuiteBackupFile -BackupRoot $backupRoot -FileName "appmodelstartup_$safeKey.txt" -Record @{
-        Type = 'AppModelStartup'; Path = $Entry.Path; Name = $Entry.Name; State = $currentState; Reason = $Entry.Reason
+        Type = 'AppModelStartup'; Path = $taskPath; Name = $taskName; State = $currentState; Reason = $Entry.Reason
         UserEnabledStartupOnce = if ($hasUserEnabled) { [string]$current.UserEnabledStartupOnce } else { '' }
         UserEnabledStartupOnceExists = [bool]$hasUserEnabled
         LastDisabledTime = if ($hasLastDisabled) { [string]$current.LastDisabledTime } else { '' }
@@ -382,15 +451,31 @@ function Disable-SuiteAppModelStartup {
     }
 
     try {
-        Set-ItemProperty -Path $Entry.Path -Name $Entry.Name -Value $Entry.DisableValue -Type DWord -ErrorAction Stop
+        Set-ItemProperty -Path $taskPath -Name $taskName -Value $disableValue -Type DWord -ErrorAction Stop
         Write-Host "  [startup] Disabled: $($Entry.Reason)"
     } catch {
         Write-Warning "  [startup] Failed to disable app-model startup task '$($Entry.Reason)': $($_.Exception.Message)"
     }
 }
 
+$discoveredStartupTasks = @(Get-WCSPackagedStartupTasks)
+$processedStartupTasks = @{}
 foreach ($entry in @($manifest.AppModelStartup)) {
-    Disable-SuiteAppModelStartup -Entry $entry
+    if ($entry.PackageFamilyPattern) {
+        foreach ($task in @($discoveredStartupTasks | Where-Object { $_.PackageFamilyName -like $entry.PackageFamilyPattern })) {
+            $key = $task.Path.ToLowerInvariant()
+            if ($processedStartupTasks.ContainsKey($key)) { continue }
+            $processedStartupTasks[$key] = $true
+            Disable-SuiteAppModelStartup -Entry ([pscustomobject]@{
+                Path = $task.Path; Name = 'State'; DisableValue = 1; Reason = $entry.Reason
+            })
+        }
+    } elseif ($entry.Path) {
+        $key = ([string]$entry.Path).ToLowerInvariant()
+        if ($processedStartupTasks.ContainsKey($key)) { continue }
+        $processedStartupTasks[$key] = $true
+        Disable-SuiteAppModelStartup -Entry $entry
+    }
 }
 
 if (-not $SkipProcessStops) {

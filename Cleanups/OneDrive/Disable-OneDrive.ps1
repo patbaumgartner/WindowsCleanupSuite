@@ -29,30 +29,48 @@ $isAdmin    = Test-SuiteIsAdmin
 foreach ($entry in @($manifest.Entries)) {
     switch ($entry.Action) {
         'RemoveFromRun' {
-            if (-not (Test-Path $entry.Path)) {
-                Write-Host "  [od]      Already absent: $($entry.Name) - $($entry.Reason)"
+            $flagPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+            $flag = Get-WCSRegistryBinaryValue -Path $flagPath -Name $entry.Name
+            $flagEnabled = ($null -eq $flag -or -not (Test-WCSStartupDisabledFlag -Value $flag))
+            $runExists = $false
+            if (Test-Path $entry.Path) {
+                $runExists = @((Get-Item -Path $entry.Path).Property) -contains $entry.Name
+            }
+            if (-not $runExists -and -not $flagEnabled) {
+                Write-Host "  [od]      Already absent/disabled: $($entry.Name) - $($entry.Reason)"
                 continue
             }
-            $names = @((Get-Item -Path $entry.Path -ErrorAction SilentlyContinue).Property)
-            if ($names -notcontains $entry.Name) {
-                Write-Host "  [od]      Already absent: $($entry.Name) - $($entry.Reason)"
-                continue
-            }
-            if (-not $PSCmdlet.ShouldProcess($entry.Name, "Remove Run entry - $($entry.Reason)")) {
-                Write-Host "  [od]      Would remove Run entry: $($entry.Name)"
+            if (-not $PSCmdlet.ShouldProcess($entry.Name, "Remove Run entry and disable startup flag - $($entry.Reason)")) {
+                Write-Host "  [od]      Would remove Run entry / disable startup flag: $($entry.Name)"
                 continue
             }
             # .($entry.Name), NOT .$entry.Name - the chained form looks up a member
             # named after the entry object itself and always yields $null.
-            $value = (Get-ItemProperty -Path $entry.Path -Name $entry.Name -ErrorAction SilentlyContinue).($entry.Name)
-            New-SuiteBackupFile -BackupRoot $backupRoot -FileName "run_$(Get-SuiteSafeFileName $entry.Name).txt" -Record @{
-                Type = 'RunEntry'; Path = $entry.Path; Name = $entry.Name; Value = [string]$value; Reason = $entry.Reason
+            if ($runExists) {
+                $value = (Get-ItemProperty -Path $entry.Path -Name $entry.Name -ErrorAction SilentlyContinue).($entry.Name)
+                New-SuiteBackupFile -BackupRoot $backupRoot -FileName "run_$(Get-SuiteSafeFileName $entry.Name).txt" -Record @{
+                    Type = 'RunEntry'; Path = $entry.Path; Name = $entry.Name; Value = [string]$value; Reason = $entry.Reason
+                }
+                try {
+                    Remove-ItemProperty -Path $entry.Path -Name $entry.Name -ErrorAction Stop
+                    Write-Host "  [od]      Removed Run entry: $($entry.Name)"
+                } catch {
+                    Write-Warning "  [od]      Failed to remove Run entry $($entry.Name): $($_.Exception.Message)"
+                }
             }
-            try {
-                Remove-ItemProperty -Path $entry.Path -Name $entry.Name -ErrorAction Stop
-                Write-Host "  [od]      Removed Run entry: $($entry.Name)"
-            } catch {
-                Write-Warning "  [od]      Failed to remove Run entry $($entry.Name): $($_.Exception.Message)"
+            if ($flagEnabled) {
+                New-SuiteBackupFile -BackupRoot $backupRoot -FileName "startupapproved_$(Get-SuiteSafeFileName $entry.Name).json" -Record @{
+                    Type = 'StartupApprovedFlag'; Path = $flagPath; Name = $entry.Name
+                    ValueBase64 = if ($null -eq $flag) { '' } else { [Convert]::ToBase64String($flag) }
+                    Existed = ($null -ne $flag); Reason = $entry.Reason
+                }
+                try {
+                    if (-not (Test-Path $flagPath)) { New-Item -Path $flagPath -Force | Out-Null }
+                    Set-ItemProperty -Path $flagPath -Name $entry.Name -Value (New-WCSStartupDisabledFlag -Existing $flag) -Type Binary -ErrorAction Stop
+                    Write-Host "  [od]      Disabled startup flag: $($entry.Name)"
+                } catch {
+                    Write-Warning "  [od]      Failed to disable startup flag $($entry.Name): $($_.Exception.Message)"
+                }
             }
         }
         'SetService' {

@@ -3,6 +3,19 @@
 All notable changes to WindowsCleanupSuite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.3] - 2026-11-25 - autorun hardening, manual launch preserved
+
+### Fixed
+- **StartupApproved flags were never disabled** — `Get-ItemProperty | Select-Object -ExpandProperty` converted `REG_BINARY` into `Object[]` on Windows PowerShell 5.1, so every flag check failed and `kDrive`, Chrome auto-launch, Dropbox and OneDrive kept coming back. Flags are now read with `.GetValue()` as a real `byte[]` and written with a 12-byte Task Manager-compatible disabled flag.
+- **Re-created Run values stay disabled** — `StartupBloat` and `WindowsSpeedup` now disable the matching per-user `StartupApproved` overlay in addition to removing the Run value. 32-bit HKLM entries (for example Dropbox under `WOW6432Node`) use the user-level `Run32` overlay, so they are covered without elevation.
+- **OneDrive** — the Run value, startup flag and all OneDrive logon/reporting/update tasks are disabled even under `LoginSafe`; that switch now protects only login-critical *services*. The OneDrive topic also backs up and restores its startup flag.
+- **Packaged app startup tasks** — Task IDs are discovered from installed app manifests instead of hard-coded registry paths (WhatsApp now uses a GUID). Versioned updater tasks are matched by the executable they run.
+- **Services** — services already set to Manual but still running are now stopped for the current session. Added Dropbox/OneDrive sync, Intel telemetry, SysMain, geolocation, Program Compatibility Assistant and other nonessential background services to the manifest. All are set to **Manual**, not Disabled, so manual launch still works; Print Spooler and Cloud Store are opt-in/gated.
+- **Startup folder shortcuts** are moved to `Backups\StartupBloat\StartupFolder` (not deleted) and restored from there.
+
+### Added
+- Regression tests for byte-array flag handling, the `Run32` overlay, packaged TaskId discovery, executable-path task matching, OneDrive `LoginSafe` behavior, StartupShortcut restore, and all-level cloud service entries.
+
 ## [1.2.2] - 2026-11-24 - per-package updates, docs refresh
 
 ### Added

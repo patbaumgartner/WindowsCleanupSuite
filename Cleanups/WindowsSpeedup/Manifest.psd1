@@ -54,6 +54,21 @@
         @{ Name = 'MapsBroker'; Reason = 'Downloaded maps manager'; Profile = 'Balanced' },
         @{ Name = 'dmwappushservice'; Reason = 'Device management WAP push routing service'; Profile = 'Balanced' },
         @{ Name = 'DusmSvc'; Reason = 'Data usage monitoring service'; Profile = 'Balanced' },
+        # --- All profiles: cloud/app background services and telemetry. Entries
+        #     without a Profile run in every level; the app can still start them on demand. ---
+        @{ Name = 'DbxSvc'; Reason = 'Dropbox background service (starts on demand when Dropbox is launched manually)' },
+        @{ Name = 'OneDrive.Sync.Service'; Reason = 'OneDrive sync service (also handled by the OneDrive topic)' },
+        @{ Name = 'IntelCollectorService'; Reason = 'Intel telemetry collector' },
+        @{ Name = 'IntelCstService'; Reason = 'Intel Context Sensing Technology service' },
+        @{ Name = 'IntelCstSupportService'; Reason = 'Intel Context Sensing Technology support service' },
+        @{ Name = 'IntelTelemetryAgent'; Reason = 'Intel telemetry agent service' },
+        @{ Name = 'PresentMonSharedService'; Reason = 'Intel PresentMon shared telemetry service' },
+        @{ Name = 'whesvc'; Reason = 'Windows Health and Optimized Experiences telemetry' },
+        @{ Name = 'wuqisvc'; Reason = 'Microsoft Usage and Quality Insights telemetry' },
+        @{ Name = 'SysMain'; Reason = 'SysMain/Superfetch preloading (on-demand after a manual start)' },
+        @{ Name = 'lfsvc'; Reason = 'Geolocation service (apps can still request location on demand)' },
+        @{ Name = 'NcdAutoSetup'; Reason = 'Network Connected Devices Auto-Setup' },
+        @{ Name = 'PcaSvc'; Reason = 'Program Compatibility Assistant compatibility/telemetry service' },
 
         # --- Maximum (aggressive) services ---
         @{ Name = 'CCleaner7'; Reason = 'CCleaner realtime/background service'; Profile = 'Maximum' },
@@ -63,12 +78,14 @@
         @{ Name = 'CDPSvc'; Reason = 'Connected Devices Platform service (Phone Link/cross-device triggers)'; Profile = 'Maximum'; Risky = $true },
         @{ NamePattern = 'CDPUserSvc_*'; Reason = 'Connected Devices Platform per-user service (Phone Link/cross-device triggers)'; Profile = 'Maximum'; Risky = $true },
         @{ Name = 'ClickToRunSvc'; Reason = 'Microsoft Office Click-to-Run background service'; Profile = 'Maximum' },
-        @{ Name = 'DbxSvc'; Reason = 'Dropbox background service'; Profile = 'Maximum' },
         @{ Name = 'CmService'; Reason = 'Windows container manager service'; Profile = 'Maximum' },
         @{ Name = 'csc_vpnagent'; Reason = 'Cisco Secure Client VPN agent (manual unless VPN always-on is required)'; Profile = 'Maximum'; Risky = $true },
         @{ Name = 'CtxsDPS'; Reason = 'Citrix Device Posture service (manual unless always required)'; Profile = 'Maximum'; Risky = $true },
         @{ Name = 'CWAUpdaterService'; Reason = 'Citrix Workspace updater service'; Profile = 'Maximum'; Risky = $true },
         @{ Name = 'Killer Network Service'; Reason = 'Killer suite background service (driver still works)'; Profile = 'Maximum' },
+        @{ NamePattern = 'WpnUserService_*'; Reason = 'Windows Push Notifications per-user service (toasts wake apps at logon)'; Profile = 'Maximum'; Risky = $true },
+        @{ NamePattern = 'cbdhsvc_*'; Reason = 'Cloud Store background service (OneDrive/Store sync helper)'; Profile = 'Maximum' },
+        @{ Name = 'Spooler'; Reason = 'Print Spooler (enable only if you print)'; Profile = 'Maximum'; Risky = $true },
         @{ Name = 'WSearch'; Reason = 'Windows Search indexing service (maximum performance profile)'; Profile = 'Maximum'; Risky = $true },
 
         # --- Marvin700 WindowsTweaks_Services additions (Disabled) ---
@@ -126,6 +143,7 @@
         @{ Path = '\Microsoft\Office\'; Name = 'Office ClickToRun Service Monitor'; Reason = 'Office Click-to-Run service monitor task'; Profile = 'Maximum' },
         @{ Path = '\Microsoft\Office\'; Name = 'Office Automatic Updates 2.0'; Reason = 'Office background updater task'; Profile = 'Maximum' },
         @{ Path = '\Microsoft\Office\'; Name = 'Office Background Push Maintenance'; Reason = 'Office background push task'; Profile = 'Maximum' },
+        @{ Path = '\Microsoft\Office\'; Name = 'Office Feature Updates C2R Client Logon'; Reason = 'Office Click-to-Run logon updater task'; Profile = 'Maximum' },
         @{ Path = '\Microsoft\Office\'; Name = 'Office Feature Updates'; Reason = 'Office feature update task'; Profile = 'Maximum' },
         @{ Path = '\Microsoft\Office\'; Name = 'Office Feature Updates Logon'; Reason = 'Office feature update task at logon'; Profile = 'Maximum' },
         @{ Path = '\Microsoft\Office\'; Name = 'Office Startup Maintenance'; Reason = 'Office startup maintenance task'; Profile = 'Maximum' },
@@ -160,32 +178,77 @@
     )
 
     StartupApproved = @(
+        # Run32 = the per-user toggle for 32-bit Run values, including the HKLM
+        # WOW6432Node\...\Run keys (Dropbox). No elevation needed for these.
+        @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32'; Name = 'Dropbox'; Reason = 'Dropbox 32-bit Run autorun' },
+        @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32'; NamePattern = '*Dropbox*'; Reason = 'Dropbox updater/helper 32-bit autorun' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'BingSvc'; Reason = 'Bing startup service app entry' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'Microsoft.Lists'; Reason = 'Microsoft Lists startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'Teams'; Reason = 'Teams startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'kDrive'; Reason = 'kDrive startup app' },
+        @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; NamePattern = '*kDrive*'; Reason = 'kDrive startup app (name variants)' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'Microsoft.YourPhone'; Reason = 'Phone Link startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'Phone Link'; Reason = 'Phone Link startup app (alt name)' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'WhatsApp.Root'; Reason = 'WhatsApp startup app' },
+        @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; NamePattern = '*WhatsApp*'; Reason = 'WhatsApp startup app (name variants)' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'Discord'; Reason = 'Discord startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'Windscribe'; Reason = 'Windscribe startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'OneDrive'; Reason = 'OneDrive startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'CCleaner'; Reason = 'CCleaner startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'Intel Graphics Software'; Reason = 'Intel Graphics startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'Skype'; Reason = 'Skype startup app' },
+        @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'Skype for Desktop'; Reason = 'Skype startup app (current name)' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'zoommsirepair'; Reason = 'Zoom MSI repair startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'BraveSoftware Update'; Reason = 'Brave browser updater startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'Lync'; Reason = 'Lync/Skype for Business startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; Name = 'Adobe Acrobat Synchronizer'; Reason = 'Adobe Acrobat cloud sync startup app' },
         @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; NamePattern = 'GoogleChromeAutoLaunch_*'; Reason = 'Google Chrome auto-launch startup app' },
-        @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; NamePattern = 'MicrosoftEdgeAutoLaunch_*'; Reason = 'Microsoft Edge auto-launch startup app' }
+        @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; NamePattern = 'MicrosoftEdgeAutoLaunch_*'; Reason = 'Microsoft Edge auto-launch startup app' },
+        @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; NamePattern = '*Slack*'; Reason = 'Slack startup app' },
+        @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; NamePattern = '*Zoom*'; Reason = 'Zoom startup app' }
     )
 
+    # Packaged (AppX/MSIX) apps store their startup tasks outside the Run key.
+    # Task IDs are often GUIDs and CHANGE with app updates, so entries match the
+    # package family and the disable script resolves the current TaskId from the
+    # installed package manifest. State 1 = DisabledByUser (the app cannot re-enable
+    # it silently; the user can still turn it on in Settings > Startup apps).
     AppModelStartup = @(
-        @{ Path = 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData\Microsoft.YourPhone_8wekyb3d8bbwe\YourPhone.Start'; Name = 'State'; DisableValue = 1; Reason = 'Phone Link startup task' },
-        @{ Path = 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData\5319275A.WhatsAppDesktop_cv1g1gvanyjgm\WhatsAppStartupTask'; Name = 'State'; DisableValue = 1; Reason = 'WhatsApp startup task' },
-        @{ Path = 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData\MSTeams_8wekyb3d8bbwe\TeamsTfwStartupTask'; Name = 'State'; DisableValue = 1; Reason = 'New Teams startup task' },
-        @{ Path = 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData\MicrosoftWindows.CrossDevice_cw5n1h2txyewy\CrossDevice.Start'; Name = 'State'; DisableValue = 1; Reason = 'Mobile devices cross-device startup task' }
+        @{ PackageFamilyPattern = '5319275A.WhatsAppDesktop_*'; Name = 'State'; DisableValue = 1; Reason = 'WhatsApp startup task' },
+        @{ PackageFamilyPattern = 'MSTeams_*'; Name = 'State'; DisableValue = 1; Reason = 'New Teams startup task' },
+        @{ PackageFamilyPattern = 'MicrosoftTeams_*'; Name = 'State'; DisableValue = 1; Reason = 'Classic Teams startup task' },
+        @{ PackageFamilyPattern = 'Microsoft.YourPhone_*'; Name = 'State'; DisableValue = 1; Reason = 'Phone Link startup task' },
+        @{ PackageFamilyPattern = 'MicrosoftWindows.CrossDevice_*'; Name = 'State'; DisableValue = 1; Reason = 'Mobile devices cross-device startup task' },
+        @{ PackageFamilyPattern = 'com.tinyspeck.slackdesktop_*'; Name = 'State'; DisableValue = 1; Reason = 'Slack startup task' },
+        @{ PackageFamilyPattern = 'DropboxInc.Dropbox_*'; Name = 'State'; DisableValue = 1; Reason = 'Dropbox packaged startup task' },
+        @{ PackageFamilyPattern = 'Infomaniak.kDrive*'; Name = 'State'; DisableValue = 1; Reason = 'kDrive packaged startup task' },
+        @{ PackageFamilyPattern = 'Microsoft.OneDriveSync_*'; Name = 'State'; DisableValue = 1; Reason = 'OneDrive packaged startup task' },
+        @{ PackageFamilyPattern = 'Microsoft.OneDrive.Photos_*'; Name = 'State'; DisableValue = 1; Reason = 'OneDrive Photos startup task' },
+        @{ PackageFamilyPattern = 'Microsoft.Windows.Photos_*'; Name = 'State'; DisableValue = 1; Reason = 'Photos startup task' },
+        @{ PackageFamilyPattern = 'Microsoft.WindowsTerminal_*'; Name = 'State'; DisableValue = 1; Reason = 'Windows Terminal startup task' },
+        @{ PackageFamilyPattern = 'AppUp.IntelArcSoftware_*'; Name = 'State'; DisableValue = 1; Reason = 'Intel Graphics tray startup task' },
+        @{ PackageFamilyPattern = 'AppUp.IntelGraphicsExperience_*'; Name = 'State'; DisableValue = 1; Reason = 'Intel Graphics tray startup task (older package)' },
+        @{ PackageFamilyPattern = 'Microsoft.M365Companions_*'; Name = 'State'; DisableValue = 1; Reason = 'Microsoft 365 companion startup tasks' },
+        @{ PackageFamilyPattern = 'Microsoft.CommandPalette_*'; Name = 'State'; DisableValue = 1; Reason = 'Command Palette startup task' },
+        @{ PackageFamilyPattern = 'SpotifyAB.SpotifyMusic_*'; Name = 'State'; DisableValue = 1; Reason = 'Spotify startup task' },
+        @{ PackageFamilyPattern = 'Microsoft.SkypeApp_*'; Name = 'State'; DisableValue = 1; Reason = 'Skype startup task' },
+        @{ PackageFamilyPattern = 'Microsoft.GamingApp_*'; Name = 'State'; DisableValue = 1; Reason = 'Xbox app startup task' },
+        @{ PackageFamilyPattern = 'Microsoft.PowerAutomateDesktop_*'; Name = 'State'; DisableValue = 1; Reason = 'Power Automate Desktop startup task' },
+        @{ PackageFamilyPattern = 'Microsoft.Todos_*'; Name = 'State'; DisableValue = 1; Reason = 'Microsoft To Do startup task' }
+    )
+
+    # Scheduled tasks sometimes use versioned/GUID names. Match the executable
+    # path instead so new updater task names are caught after an app update.
+    TaskActionPatterns = @(
+        @{ Pattern = '\Dropbox\'; Reason = 'Dropbox background/updater task' },
+        @{ Pattern = '\kDrive\'; Reason = 'kDrive background task' },
+        @{ Pattern = '\WhatsApp\'; Reason = 'WhatsApp background/updater task' },
+        @{ Pattern = '\Microsoft OneDrive\'; Reason = 'OneDrive background/updater task' },
+        @{ Pattern = '\Slack\'; Reason = 'Slack background/updater task' },
+        @{ Pattern = '\Microsoft\Teams\'; Reason = 'Teams background/updater task' },
+        @{ Pattern = '\Discord\'; Reason = 'Discord background/updater task' },
+        @{ Pattern = '\Google\Chrome\Application\'; Reason = 'Chrome background/updater task' },
+        @{ Pattern = '\Microsoft\Edge\Application\'; Reason = 'Edge background/updater task' }
     )
 
     ProcessStops = @(
@@ -200,6 +263,9 @@
         @{ Name = 'PhoneExperienceHost'; Reason = 'Phone Link app process' },
         @{ Name = 'CrossDeviceService'; Reason = 'Cross-device background process' },
         @{ Name = 'CrossDeviceResume'; Reason = 'Cross-device resume process' },
-        @{ Name = 'WhatsApp'; Reason = 'WhatsApp desktop process' }
+        @{ Name = 'WhatsApp'; Reason = 'WhatsApp desktop process' },
+        @{ Name = 'kDrive'; Reason = 'kDrive desktop process' },
+        @{ Name = 'IGCCTray'; Reason = 'Intel Graphics tray process' },
+        @{ Name = 'Microsoft.Lists'; Reason = 'Microsoft Lists sync process' }
     )
 }

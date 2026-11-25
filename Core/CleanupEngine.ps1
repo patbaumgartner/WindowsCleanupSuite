@@ -146,6 +146,57 @@ function Get-SuiteCachedTasks {
     return $global:WCS_TaskCache
 }
 
+function Get-WCSRegistryBinaryValue {
+    # Get-ItemProperty | Select-Object -ExpandProperty turns a REG_BINARY byte[]
+    # into Object[] on PS 5.1 (so '-is [byte[]]' would always be false).
+    # The registry provider's .GetValue() keeps the real byte[] and value kind.
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+    if (-not (Test-Path $Path)) { return $null }
+    $key = Get-Item -Path $Path -ErrorAction SilentlyContinue
+    if ($null -eq $key) { return $null }
+    try { $value = $key.GetValue($Name, $null) } catch { return $null }
+    if ($value -is [byte[]]) { return [byte[]]$value }
+    return $null
+}
+
+function New-WCSStartupDisabledFlag {
+    # StartupApproved flags are 12-byte values: byte 0 = 2 enabled / 3 disabled,
+    # bytes 1..11 = the timestamp Task Manager writes when toggling the entry.
+    param([byte[]]$Existing)
+    $flag = New-Object byte[] 12
+    if ($null -ne $Existing -and $Existing.Length -ge 12) {
+        [Array]::Copy($Existing, 0, $flag, 0, 12)
+    }
+    $flag[0] = 3
+    return $flag
+}
+
+function Test-WCSStartupDisabledFlag {
+    param([byte[]]$Value)
+    if ($null -eq $Value -or $Value.Length -eq 0) { return $false }
+    return ([int]$Value[0] -ne 2)
+}
+
+function Get-WCSRunStartupApprovedPath {
+    # Per-user Task Manager toggle for a Run entry. 32-bit Run keys (including
+    # HKLM\Software\WOW6432Node\...\Run) are toggled in the user's Run32 overlay,
+    # which means Dropbox can be disabled without elevation.
+    param([Parameter(Mandatory = $true)][string]$RunPath)
+    if ($RunPath -like '*\StartupApproved\*') { return $RunPath }
+    if ($RunPath -like '*\RunOnce') { return '' }
+    if ($RunPath -like 'HKCU:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run*' -or
+        $RunPath -like 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run*') {
+        return 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32'
+    }
+    if ($RunPath -like 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run*') {
+        return 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+    }
+    return 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+}
+
 function Get-RegistryEntryValues {
     param(
         [Parameter(Mandatory = $true)][string]$Path,

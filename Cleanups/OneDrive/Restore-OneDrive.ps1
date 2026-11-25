@@ -5,6 +5,7 @@
 
 .DESCRIPTION
     - Run entries (Type='RunEntry'): re-adds the OneDrive Run entry.
+    - Startup flags (Type='StartupApprovedFlag'): restores/removes the original flag.
     - Services (Type='Service'): restores the original startup type.
 
 .PARAMETER WhatIf
@@ -31,6 +32,26 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Obj
         Write-Host "  [od]      Restored Run entry: $($record.Name)"
     } catch {
         Write-Error "  [od]      Failed to re-add Run entry $($record.Name): $($_.Exception.Message)"
+    }
+}
+
+foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Object { $_.Type -eq 'StartupApprovedFlag' })) {
+    if (-not $PSCmdlet.ShouldProcess($record.Name, 'Restore StartupApproved flag')) {
+        Write-Host "  [od]      Would restore startup flag: $($record.Name)"
+        continue
+    }
+    try {
+        if (-not (Test-Path $record.Path)) { New-Item -Path $record.Path -Force | Out-Null }
+        if ($record.PSObject.Properties.Name -contains 'Existed' -and -not [bool]$record.Existed) {
+            Remove-ItemProperty -Path $record.Path -Name $record.Name -ErrorAction SilentlyContinue
+        } elseif ($record.ValueBase64) {
+            Set-ItemProperty -Path $record.Path -Name $record.Name -Value ([Convert]::FromBase64String($record.ValueBase64)) -Type Binary -ErrorAction Stop
+        } else {
+            Remove-ItemProperty -Path $record.Path -Name $record.Name -ErrorAction SilentlyContinue
+        }
+        Write-Host "  [od]      Restored startup flag: $($record.Name)"
+    } catch {
+        Write-Error "  [od]      Failed to restore startup flag $($record.Name): $($_.Exception.Message)"
     }
 }
 

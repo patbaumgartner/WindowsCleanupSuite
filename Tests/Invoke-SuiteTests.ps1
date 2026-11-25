@@ -445,7 +445,7 @@ Test-SuiteCheck -Name 'Menu: preview runs in a runspace pool; -Apply/-NoParallel
     $menuText -match 'Invoke-WCSParallelCleanups')
 Test-SuiteCheck -Name 'Menu: -Quick forwarded only to the heavy scanners via Get-WCSCleanupJobArgs' -Pass (
     $menuText -match 'function Get-WCSCleanupJobArgs' -and
-    (@([regex]::Matches($menuText, "jobArgs\['Quick'\] = \$true")).Count -ge 2) -and
+    (@([regex]::Matches($menuText, 'jobArgs\[''Quick''\] = \$true')).Count -ge 2) -and
     $menuText -match 'Disable-ServicesAndTasks\.ps1' -and
     $menuText -match 'Disable-InstalledSoftware\.ps1' -and
     $menuText -match 'Disable-TempAndJunkFiles\.ps1')
@@ -453,8 +453,8 @@ Test-SuiteCheck -Name 'Menu: Save-WCSPreferences preserves an existing AutoReRun
     $menuText -match '\$existing = Read-WCSPreferences' -and
     $menuText -match 'AutoReRunDays = \$autoDays')
 Test-SuiteCheck -Name 'Menu: action 4 schedules from AutoReRunDays pref (0 = unregister), action 5 runs review tool' -Pass (
-    $menuText -match "Register-WCSReRunTask -Days \(\[int\]\$ans\)" -and
-    $menuText -match "Register-WCSReRunTask -Days \$defaultDays" -and
+    $menuText -match 'Register-WCSReRunTask -Days \(\[int\]\$ans\)' -and
+    $menuText -match 'Register-WCSReRunTask -Days \$defaultDays' -and
     $menuText -match 'Tools\\Review-WCSBackup\.ps1')
 Test-SuiteCheck -Name 'Runner: Run-Menu.ps1 forwards the new switches' -Pass (
     (Get-Content -Raw (Join-Path $SuiteRoot 'Runners\Run-Menu.ps1') -ErrorAction SilentlyContinue) -match '\[switch\]\$Quick' -and
@@ -584,6 +584,49 @@ Test-SuiteCheck -Name 'ServicesAndTasks: restore prefers Enabled flag, QWORD Las
     ($wsRestoreText -match '\[long\]\$record\.LastDisabledTime') -and
     ($wsRestoreText -match 'LastDisabledTimeExists') -and
     ($wsRestoreText -match 'VisualFXSettingExists'))
+
+# 10d2. Auto-start hardening: disable the flag AND remove the autorun, discover
+# packaged startup tasks from the live package manifest, keep manual starts working.
+$engineText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Core\CleanupEngine.ps1') -ErrorAction SilentlyContinue
+$sbText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\StartupBloat\Disable-StartupBloat.ps1') -ErrorAction SilentlyContinue
+$sbRestoreText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\StartupBloat\Restore-StartupBloat.ps1') -ErrorAction SilentlyContinue
+$sbManifest = Import-PowerShellDataFile -Path (Join-Path $SuiteRoot 'Cleanups\StartupBloat\Manifest.psd1') -ErrorAction SilentlyContinue
+$wsManifestAuto = Import-PowerShellDataFile -Path (Join-Path $SuiteRoot 'Cleanups\WindowsSpeedup\Manifest.psd1') -ErrorAction SilentlyContinue
+$odText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\OneDrive\Disable-OneDrive.ps1') -ErrorAction SilentlyContinue
+$odRestoreText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\OneDrive\Restore-OneDrive.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'Engine: StartupApproved flags read as real REG_BINARY byte[]' -Pass (
+    $engineText.Contains('function Get-WCSRegistryBinaryValue') -and
+    $engineText.Contains('$key.GetValue($Name, $null)') -and
+    $engineText.Contains('function New-WCSStartupDisabledFlag'))
+Test-SuiteCheck -Name 'StartupBloat: disables StartupApproved flag as well as removing Run value' -Pass (
+    $sbText.Contains('Get-WCSRunStartupApprovedPath') -and
+    $sbText.Contains('New-WCSStartupDisabledFlag') -and
+    $sbText.Contains("Type = 'StartupApprovedFlag'"))
+Test-SuiteCheck -Name 'StartupBloat: Startup-folder shortcuts are moved to backups, not deleted' -Pass (
+    @($sbManifest.StartupFolders).Count -gt 0 -and
+    $sbText.Contains('Move-Item -LiteralPath') -and
+    $sbRestoreText.Contains("record.Type -eq 'StartupShortcut'"))
+Test-SuiteCheck -Name 'WindowsSpeedup: StartupApproved uses byte[] helper (no Object[] cast bug)' -Pass (
+    $wsText.Contains('Get-WCSRegistryBinaryValue -Path $Entry.Path -Name $name') -and
+    -not $wsText.Contains('value is not a binary StartupApproved flag'))
+Test-SuiteCheck -Name 'WindowsSpeedup: packaged startup TaskIds discovered from installed app manifests' -Pass (
+    $wsText.Contains('Get-WCSPackagedStartupTasks') -and
+    $wsText.Contains('Get-AppxPackageManifest') -and
+    @($wsManifestAuto.AppModelStartup | Where-Object { $_.PackageFamilyPattern -like '5319275A.WhatsAppDesktop*' }).Count -gt 0)
+Test-SuiteCheck -Name 'WindowsSpeedup: versioned app updater tasks matched by executable path' -Pass (
+    @($wsManifestAuto.TaskActionPatterns).Count -gt 0 -and
+    $wsText.Contains('$task.Actions | ForEach-Object'))
+Test-SuiteCheck -Name 'WindowsSpeedup: LoginSafe no longer skips OneDrive autorun/tasks' -Pass (
+    -not $wsText.Contains('Skipped OneDrive Run autorun (LoginSafe)') -and
+    -not $wsText.Contains('Skipped OneDrive scheduled task changes (LoginSafe)'))
+Test-SuiteCheck -Name 'WindowsSpeedup: cloud app services are Manual in every level but still manually startable' -Pass (
+    @($wsManifestAuto.Services | Where-Object { $_.Name -eq 'DbxSvc' -and $null -eq $_.Profile }).Count -gt 0 -and
+    @($wsManifestAuto.Services | Where-Object { $_.Name -eq 'OneDrive.Sync.Service' -and $null -eq $_.Profile }).Count -gt 0 -and
+    @($wsManifestAuto.Services | Where-Object { $_.Name -eq 'PcaSvc' -and $null -eq $_.Profile }).Count -gt 0 -and
+    @($wsManifestAuto.Services | Where-Object { $_.Name -eq 'Spooler' -and $_.Risky -eq $true }).Count -gt 0)
+Test-SuiteCheck -Name 'OneDrive: startup flag disabled and restorable when Run value is recreated' -Pass (
+    $odText.Contains('New-WCSStartupDisabledFlag') -and
+    $odRestoreText.Contains("'StartupApprovedFlag'"))
 
 # 10e. TempAndJunkFiles: Package Cache is not junk; admin-only steps are gated.
 $tjManifest = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\TempAndJunkFiles\Manifest.psd1') -ErrorAction SilentlyContinue

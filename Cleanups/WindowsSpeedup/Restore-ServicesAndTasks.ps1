@@ -124,8 +124,16 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot | Where-Obj
         continue
     }
     try {
-        Set-ItemProperty -Path $record.Path -Name $record.Name -Value $value -Type Binary -ErrorAction Stop
-        Write-Host "  [startup] Restored: $($record.Name)"
+        if ($record.PSObject.Properties.Name -contains 'Existed' -and -not [bool]$record.Existed) {
+            Remove-ItemProperty -Path $record.Path -Name $record.Name -ErrorAction SilentlyContinue
+            Write-Host "  [startup] Restored (removed flag that was absent before): $($record.Name)"
+        } elseif ($null -ne $value -and $value.Count -gt 0) {
+            Set-ItemProperty -Path $record.Path -Name $record.Name -Value $value -Type Binary -ErrorAction Stop
+            Write-Host "  [startup] Restored: $($record.Name)"
+        } else {
+            Remove-ItemProperty -Path $record.Path -Name $record.Name -ErrorAction SilentlyContinue
+            Write-Host "  [startup] Restored (no original flag): $($record.Name)"
+        }
     } catch {
         Write-Error "  [startup] Failed to restore $($record.Name): $($_.Exception.Message)"
     }

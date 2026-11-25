@@ -220,7 +220,8 @@ function Get-WCSCleanupJobArgs {
     )
     $jobArgs = @{}
     if ($Script -eq 'Cleanups\WindowsSpeedup\Disable-ServicesAndTasks.ps1') {
-        # Profile comes from the level; LoginSafe stays on (as before).
+        # Profile comes from the level; LoginSafe keeps only login-critical
+        # services, not OneDrive/cloud app auto-start.
         $jobArgs['Profile'] = $Level.Profile
         $jobArgs['LoginSafe'] = $true
         $jobArgs['AllowRisky'] = [bool]$AllowRisky

@@ -140,13 +140,13 @@ Individual scripts still work standalone (all cleanups support `-WhatIf`):
 
 | Topic | What it does |
 |---|---|
-| **ServicesTasks** | Disables nonessential Windows services, scheduled tasks, startup apps and installed bloatware (Balanced/Maximum profiles). |
+| **ServicesTasks** | Disables nonessential Windows services, scheduled tasks, startup apps (Run values + StartupApproved flags + packaged startup tasks) and installed bloatware. Manual launches keep working. |
 | **PrivacySettings** | Disables advertising ID, tailored experiences, speech consent, location/personalization (registry). |
 | **Privacy** | Telemetry `AllowTelemetry=0`, advertising ID, activity history, CEIP/AppCompat, consumer/cloud content, ContentDeliveryManager suggested apps, WER off (Raphire-style policies). |
 | **Browsers** | Edge/Chrome `BackgroundModeEnabled=0`, Edge `StartupBoostEnabled=0`, Firefox background update + Pocket off (HKLM policies, all users). |
 | **Network** | LLMNR off, Delivery Optimization → Manual + `DODownloadMode=0`. Risky (only with `-AllowRisky`): NetBIOS over TCP/IP off per adapter, static DNS 1.1.1.1/8.8.8.8 (per-adapter backup). |
 | **AI** | Copilot/Recall/Click-to-Do, WSAIFabricSvc + AI policies in Edge/Chrome/Paint/Notepad. |
-| **OneDrive** | OneDrive auto-start + `OneDrive.Sync.Service` → Manual. |
+| **OneDrive** | OneDrive Run entry + startup flag + logon/update tasks; `OneDrive.Sync.Service` → Manual (files stay local, manual launch works). |
 | **ExtremeExtras** (Level 4) | Fully disables `WpnUserService`, `AppReadiness`, `StoreBrokerService`, `SmsRouter`. |
 | **Maintenance** | Temp/junk files, caches, prefetch, event logs, Disk Cleanup (`cleanmgr`), defrag. |
 | **DNS** | DNS flush, IP stack reset, TCP autotuning + RSS tuning. |
@@ -343,6 +343,7 @@ WindowsCleanupSuite/
 - **`-AllowRisky` gate** — manifest entries flagged `Risky = $true` (NetBIOS off, static DNS resolvers, VPN/Citrix services, Windows Search indexing, Connected Devices Platform) are skipped unless `-AllowRisky` is passed.
 - **System Restore point** created automatically on apply (admin required).
 - **Backups** (`Backups\`) keep the ORIGINAL state of every changed item (repeated runs never overwrite them); restore scripts (`Restore-*.ps1`) for each cleanup.
+- **Auto-start only, not removal** — no app is uninstalled and no binary is deleted. Run values, StartupApproved flags and packaged startup tasks are backed up; Startup-folder shortcuts are moved to `Backups\StartupBloat\StartupFolder` and can be restored. Services are set to Manual (never Disabled by these topics), so you can still launch WhatsApp/kDrive/Dropbox/OneDrive yourself.
 - **Reversibility exceptions** (read before applying): junk-file/event-log deletions (`TempAndJunkFiles`) and the `DNSReset` stack reset are **not** restorable; removed **UWP/provisioned apps** are reinstalled from the Microsoft Store, not auto-restored; Win32 apps get their Uninstall registry keys back, not a reinstallation.
 - **No data deletion of important items**: protected patterns (Intel DSA, drivers) are never touched; OneDrive/Dropbox/Teams/PowerToys/TeamViewer remain kept per your needs.
 - **Risky items are explicit**: `Privacy` (Raphire policies), `Network` (NetBIOS off, static DNS) — apply via `-AllowRisky` or the menu option.
