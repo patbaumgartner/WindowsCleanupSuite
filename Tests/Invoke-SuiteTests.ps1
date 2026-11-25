@@ -627,6 +627,18 @@ Test-SuiteCheck -Name 'WindowsSpeedup: cloud app services are Manual in every le
 Test-SuiteCheck -Name 'OneDrive: startup flag disabled and restorable when Run value is recreated' -Pass (
     $odText.Contains('New-WCSStartupDisabledFlag') -and
     $odRestoreText.Contains("'StartupApprovedFlag'"))
+Test-SuiteCheck -Name 'StartupBloat: app-internal autorun settings backed up and restorable' -Pass (
+    $engineText.Contains('function Get-WCSSqliteSingleValue') -and
+    $engineText.Contains('function Set-WCSSqliteSingleValue') -and
+    $engineText.Contains('function Get-WCSPythonCommand') -and
+    $sbText.Contains('AppAutoStartSettings') -and
+    $sbText.Contains("Type = 'AppAutoStartSqlite'") -and
+    $sbText.Contains("Type = 'AppAutoStartRegistry'") -and
+    $sbRestoreText.Contains("record.Type -eq 'AppAutoStartSqlite'") -and
+    $sbRestoreText.Contains("record.Type -eq 'AppAutoStartRegistry'"))
+Test-SuiteCheck -Name 'StartupBloat: kDrive autoStart and OneDrive AutoStartEnabled disabled by default' -Pass (
+    @($sbManifest.AppAutoStartSettings | Where-Object { $_.Name -eq 'kDrive' -and $_.Kind -eq 'Sqlite' -and $_.Column -eq 'autoStart' -and $_.DisabledValue -eq 0 }).Count -gt 0 -and
+    @($sbManifest.AppAutoStartSettings | Where-Object { $_.Name -eq 'OneDrive' -and $_.Kind -eq 'Registry' -and $_.ValueName -eq 'AutoStartEnabled' -and $_.DisabledValue -eq 0 }).Count -gt 0)
 
 # 10e. TempAndJunkFiles: Package Cache is not junk; admin-only steps are gated.
 $tjManifest = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\TempAndJunkFiles\Manifest.psd1') -ErrorAction SilentlyContinue

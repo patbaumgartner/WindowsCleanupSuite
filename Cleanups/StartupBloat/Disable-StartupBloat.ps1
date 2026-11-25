@@ -10,6 +10,8 @@
       - sets the matching per-user StartupApproved flag to "disabled" so an app
         that re-creates its Run value (on update or on its own) still does NOT
         start at logon,
+      - turns off app-internal autorun settings (kDrive/OneDrive) so a manual
+        launch does not re-create the Run value or re-enable the flag,
       - moves matching shortcuts out of the Startup folders into Backups
         (they are not deleted - the app can still be launched manually).
 
@@ -112,6 +114,97 @@ function Disable-SuiteAutoStartName {
     }
 }
 
+function Disable-SuiteAppAutoStart {
+    param([Parameter(Mandatory = $true)]$Entry)
+
+    $label = Get-SuiteEntryLabel -Entry $Entry
+    if (Test-SuiteIsProtected -Name $Entry.Name -Manifest $manifest) {
+        Write-Host "  Skipped (Protected) app autostart $($Entry.Name)"
+        return
+    }
+
+    $path = Resolve-WCSAppSettingPath -Entry $Entry
+    if (-not $path -or -not (Test-Path -LiteralPath $path)) {
+        Write-Host "  Skipped app autostart $($Entry.Name) (not installed)"
+        return
+    }
+
+    $disabledValue = [int]$Entry.DisabledValue
+    $processNames = @($Entry.ProcessNames)
+
+    if ($Entry.Kind -eq 'Sqlite') {
+        $original = Get-WCSSqliteSingleValue -Database $path -Table $Entry.Table -Column $Entry.Column -Immutable
+        if ($null -eq $original -or $original -eq '') {
+            Write-Warning "  Could not read app autostart setting for '$($Entry.Name)'."
+            return
+        }
+        try { $originalInt = [int]$original } catch {
+            Write-Warning "  Unexpected app autostart value for '$($Entry.Name)': $original"
+            return
+        }
+        if ($originalInt -eq $disabledValue) {
+            Write-Host "  Already disabled app autostart $($Entry.Name)"
+            return
+        }
+        if (-not $PSCmdlet.ShouldProcess($Entry.Name, "Disable app autostart setting [$label]")) {
+            Write-Host "  Would disable app autostart setting $($Entry.Name)"
+            return
+        }
+        Stop-WCSAppProcesses -Names $processNames
+        New-SuiteBackupFile -BackupRoot $backupRoot -FileName "appautostart_$(Get-SuiteSafeFileName $Entry.Name).json" -Record @{
+            Type = 'AppAutoStartSqlite'; Name = $Entry.Name; Path = $path
+            Table = $Entry.Table; Column = $Entry.Column; Value = $originalInt
+            ProcessNames = $processNames; Reason = $label
+        } | Out-Null
+        if (Set-WCSSqliteSingleValue -Database $path -Table $Entry.Table -Column $Entry.Column -Value $disabledValue) {
+            Write-Host "  Disabled app autostart setting $($Entry.Name)"
+        } else {
+            Write-Warning "  Failed to disable app autostart setting '$($Entry.Name)'."
+        }
+        return
+    }
+
+    if ($Entry.Kind -eq 'Registry') {
+        $key = Get-Item -LiteralPath $path -ErrorAction SilentlyContinue
+        if ($null -eq $key) {
+            Write-Warning "  Could not read app autostart setting for '$($Entry.Name)'."
+            return
+        }
+        $original = $key.GetValue($Entry.ValueName, $null)
+        $existed = ($null -ne $original)
+        $originalInt = 0
+        if ($existed) {
+            try { $originalInt = [int]$original } catch {
+                Write-Warning "  Unexpected app autostart value for '$($Entry.Name)': $original"
+                return
+            }
+        }
+        if ($existed -and $originalInt -eq $disabledValue) {
+            Write-Host "  Already disabled app autostart $($Entry.Name)"
+            return
+        }
+        if (-not $PSCmdlet.ShouldProcess($Entry.Name, "Disable app autostart setting [$label]")) {
+            Write-Host "  Would disable app autostart setting $($Entry.Name)"
+            return
+        }
+        Stop-WCSAppProcesses -Names $processNames
+        New-SuiteBackupFile -BackupRoot $backupRoot -FileName "appautostart_$(Get-SuiteSafeFileName $Entry.Name).json" -Record @{
+            Type = 'AppAutoStartRegistry'; Name = $Entry.Name; Path = $path
+            ValueName = $Entry.ValueName; Value = $originalInt; Existed = $existed
+            ProcessNames = $processNames; Reason = $label
+        } | Out-Null
+        try {
+            Set-ItemProperty -LiteralPath $path -Name $Entry.ValueName -Value $disabledValue -Type DWord -ErrorAction Stop
+            Write-Host "  Disabled app autostart setting $($Entry.Name)"
+        } catch {
+            Write-Warning "  Failed to disable app autostart setting '$($Entry.Name)': $($_.Exception.Message)"
+        }
+        return
+    }
+
+    Write-Warning "  Unknown app autostart kind '$($Entry.Kind)' for '$($Entry.Name)'."
+}
+
 foreach ($target in @($manifest.Targets)) {
     $runPath = $target.Path
     $overlayPath = Get-WCSRunStartupApprovedPath -RunPath $runPath
@@ -136,6 +229,11 @@ foreach ($target in @($manifest.Targets)) {
         if ([string]::IsNullOrWhiteSpace($name)) { continue }
         Disable-SuiteAutoStartName -Target $target -Name $name
     }
+}
+
+# --- App-internal autorun settings ---------------------------------------------------
+foreach ($entry in @($manifest.AppAutoStartSettings)) {
+    Disable-SuiteAppAutoStart -Entry $entry
 }
 
 # --- Startup folder shortcuts -------------------------------------------------------

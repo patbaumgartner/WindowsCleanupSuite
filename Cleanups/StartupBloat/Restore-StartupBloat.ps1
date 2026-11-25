@@ -5,8 +5,9 @@
 
 .DESCRIPTION
     Reads the backup records (JSON) from <SuiteRoot>\Backups\StartupBloat and restores
-    Run values, per-user StartupApproved flags and Startup-folder shortcuts. HKLM
-    restorations are skipped with a warning when not elevated.
+    Run values, per-user StartupApproved flags, app-internal autorun settings and
+    Startup-folder shortcuts. HKLM restorations are skipped with a warning when
+    not elevated.
 
 .PARAMETER WhatIf
     Preview mode - shows what would change without touching the system.
@@ -49,6 +50,38 @@ foreach ($record in @(Get-SuiteBackupRecords -BackupRoot $backupRoot)) {
             Write-Host "  Restored StartupFolder shortcut: $($record.Name)"
         } catch {
             Write-Error "  Failed to restore shortcut '$($record.Name)': $($_.Exception.Message)"
+        }
+        continue
+    }
+
+    # App-internal autorun settings (kDrive SQLite / OneDrive registry).
+    if ($record.Type -eq 'AppAutoStartSqlite' -or $record.Type -eq 'AppAutoStartRegistry') {
+        if (-not $record.Path -or -not (Test-Path -LiteralPath $record.Path)) {
+            Write-Warning "  Skipping app autostart restore: path not found for $($record.Name)."
+            continue
+        }
+        if (-not $PSCmdlet.ShouldProcess($record.Name, 'Restore app autostart setting')) {
+            Write-Host "  Would restore app autostart setting: $($record.Name)"
+            continue
+        }
+        Stop-WCSAppProcesses -Names @($record.ProcessNames)
+        if ($record.Type -eq 'AppAutoStartSqlite') {
+            if (Set-WCSSqliteSingleValue -Database $record.Path -Table $record.Table -Column $record.Column -Value ([int]$record.Value)) {
+                Write-Host "  Restored app autostart setting: $($record.Name)"
+            } else {
+                Write-Warning "  Failed to restore app autostart setting '$($record.Name)'."
+            }
+            continue
+        }
+        try {
+            if ($record.PSObject.Properties.Name -contains 'Existed' -and -not [bool]$record.Existed) {
+                Remove-ItemProperty -LiteralPath $record.Path -Name $record.ValueName -ErrorAction SilentlyContinue
+            } else {
+                Set-ItemProperty -LiteralPath $record.Path -Name $record.ValueName -Value ([int]$record.Value) -Type DWord -ErrorAction Stop
+            }
+            Write-Host "  Restored app autostart setting: $($record.Name)"
+        } catch {
+            Write-Error "  Failed to restore app autostart setting '$($record.Name)': $($_.Exception.Message)"
         }
         continue
     }

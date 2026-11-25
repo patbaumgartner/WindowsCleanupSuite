@@ -197,6 +197,94 @@ function Get-WCSRunStartupApprovedPath {
     return 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
 }
 
+function Get-WCSPythonCommand {
+    # SQLite helper for app settings (kDrive stores autoStart in .parms.db).
+    # Prefer python; fall back to the py launcher with -3.
+    foreach ($name in @('python', 'py')) {
+        $cmd = Get-Command -Name $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -ne $cmd) {
+            $prefix = if ($name -eq 'py') { @('-3') } else { @() }
+            return [pscustomobject]@{ Path = $cmd.Source; Prefix = $prefix }
+        }
+    }
+    return $null
+}
+
+function Resolve-WCSAppSettingPath {
+    param([Parameter(Mandatory = $true)]$Entry)
+    if ($Entry.PathKind -eq 'LocalAppData') { return Join-Path $env:LOCALAPPDATA $Entry.Path }
+    if ($Entry.PathKind -eq 'AppData') { return Join-Path $env:APPDATA $Entry.Path }
+    return $Entry.Path
+}
+
+function Get-WCSSqliteSingleValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$Database,
+        [Parameter(Mandatory = $true)][string]$Table,
+        [Parameter(Mandatory = $true)][string]$Column,
+        [switch]$Immutable
+    )
+    if (-not (Test-Path -LiteralPath $Database)) { return $null }
+    $python = Get-WCSPythonCommand
+    if ($null -eq $python) { return $null }
+
+    $code = @'
+import sqlite3, sys, urllib.parse
+db, table, column, mode = sys.argv[1:5]
+if mode == 'immutable':
+    uri = 'file:' + urllib.parse.quote(db.replace('\\', '/')) + '?mode=ro&immutable=1'
+    con = sqlite3.connect(uri, uri=True, timeout=5)
+else:
+    con = sqlite3.connect(db, timeout=10)
+try:
+    row = con.execute('select "{0}" from "{1}" limit 1'.format(column, table)).fetchone()
+    print('' if row is None or row[0] is None else row[0])
+finally:
+    con.close()
+'@
+    $mode = if ($Immutable) { 'immutable' } else { 'normal' }
+    $args = @() + @($python.Prefix) + @('-c', $code, $Database, $Table, $Column, $mode)
+    $output = & $python.Path @args 2>$null
+    if ($LASTEXITCODE -ne 0) { return $null }
+    return (($output -join "`n").Trim())
+}
+
+function Set-WCSSqliteSingleValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$Database,
+        [Parameter(Mandatory = $true)][string]$Table,
+        [Parameter(Mandatory = $true)][string]$Column,
+        [Parameter(Mandatory = $true)][int]$Value
+    )
+    if (-not (Test-Path -LiteralPath $Database)) { return $false }
+    $python = Get-WCSPythonCommand
+    if ($null -eq $python) { return $false }
+
+    $code = @'
+import sqlite3, sys
+db, table, column, value = sys.argv[1:5]
+con = sqlite3.connect(db, timeout=10)
+try:
+    con.execute('update "{0}" set "{1}"=?'.format(table, column), (int(value),))
+    con.commit()
+finally:
+    con.close()
+'@
+    $args = @() + @($python.Prefix) + @('-c', $code, $Database, $Table, $Column, [string]$Value)
+    $null = & $python.Path @args 2>$null
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Stop-WCSAppProcesses {
+    param([string[]]$Names)
+    foreach ($name in @($Names | Where-Object { $_ } | Sort-Object -Unique)) {
+        $procs = @(Get-Process -Name $name -ErrorAction SilentlyContinue)
+        if ($procs.Count -eq 0) { continue }
+        $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+    }
+}
+
 function Get-RegistryEntryValues {
     param(
         [Parameter(Mandatory = $true)][string]$Path,

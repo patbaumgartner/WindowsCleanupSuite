@@ -57,6 +57,24 @@
         @{ Hive = 'HKLM'; Name = 'OneDrive';                            Path = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' }
     )
 
+    # Some apps rewrite their own autorun when they are launched manually.
+    # Turning off the app-internal setting keeps manual launches working without
+    # re-creating the Run value or re-enabling the StartupApproved flag.
+    AppAutoStartSettings = @(
+        @{
+            Name = 'kDrive'; Kind = 'Sqlite'; PathKind = 'LocalAppData'; Path = 'kDrive\.parms.db'
+            Table = 'parameters'; Column = 'autoStart'; DisabledValue = 0
+            ProcessNames = @('kDrive')
+            Reason = 'kDrive re-creates its Run entry and re-enables the startup flag on every launch when this is 1.'
+        },
+        @{
+            Name = 'OneDrive'; Kind = 'Registry'; Path = 'HKCU:\Software\Microsoft\OneDrive'
+            ValueName = 'AutoStartEnabled'; DisabledValue = 0
+            ProcessNames = @('OneDrive')
+            Reason = 'OneDrive re-creates its Run entry when launched manually when this is 1.'
+        }
+    )
+
     # Startup folder shortcuts are MOVED to Backups\StartupBloat\StartupFolder
     # (not deleted), so the app can still be launched normally from the Start menu.
     StartupFolders = @(

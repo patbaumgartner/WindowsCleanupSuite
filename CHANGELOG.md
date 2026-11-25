@@ -3,6 +3,15 @@
 All notable changes to WindowsCleanupSuite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.4] - 2026-11-25 - manual launches no longer restore autorun
+
+### Fixed
+- **kDrive/OneDrive re-enabled their own autorun after a manual launch** - kDrive writes its HKCU Run value and resets the StartupApproved flag whenever it starts while its internal `autoStart` setting is `1`; OneDrive does the same through `AutoStartEnabled`. `StartupBloat` now backs up and turns off those app-internal settings, so manually opening the apps keeps working without restoring login autorun.
+- **kDrive tray icon after manual launch** - documented the kDrive 4.0.4 GUI startup quirk: if sync runs but the tray icon is absent, quit all `kDrive.exe` processes and launch kDrive again. With internal autorun disabled that restart no longer re-enables startup.
+
+### Added
+- SQLite/registry helpers in `Core\CleanupEngine.ps1` plus backup/restore records for app-internal autorun settings. Repeated runs preserve the original values, and `Restore-StartupBloat.ps1` puts them back.
+
 ## [1.2.3] - 2026-11-25 - autorun hardening, manual launch preserved
 
 ### Fixed
