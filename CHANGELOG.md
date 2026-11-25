@@ -3,6 +3,14 @@
 All notable changes to WindowsCleanupSuite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.5] - 2026-11-25 - kDrive tray icon restored after notification service fix
+
+### Fixed
+- **kDrive tray icon missing after a normal manual launch** — disabling `WpnUserService` (per-user push notifications) made kDrive 4.0.4 hang in `NotificationManager.Init()` before `TrayIconManager.Initialize()`, so no tray icon was registered. Both the WindowsSpeedup `WpnUserService_*` entry and the ExtremeExtras `WpnUserService` entry are removed, and the service is now protected. kDrive's `autoStart` remains disabled, so manual launch still does not restore autorun.
+
+### Notes
+- Existing sessions where the per-user service was created while disabled must sign out and back in once; Windows cannot recreate the per-user service instance without a new logon session.
+
 ## [1.2.4] - 2026-11-25 - manual launches no longer restore autorun
 
 ### Fixed

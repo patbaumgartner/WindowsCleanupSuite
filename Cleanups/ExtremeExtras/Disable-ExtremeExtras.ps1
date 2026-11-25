@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Fully disables extreme level-4 services (push notifications, Store broker, etc.).
+    Fully disables extreme level-4 services (app readiness, Store broker, etc.).
 
 .DESCRIPTION
     Data-driven from Cleanups\ExtremeExtras\ExtremeExtras.psd1:
@@ -37,6 +37,11 @@ foreach ($entry in @($manifest.Services)) {
     }
     if (-not $isAdmin -and -not $WhatIfPreference) {
         Write-Warning "  [ext]     Skipped (requires Administrator): $($entry.Name)"
+        continue
+    }
+
+    if (Test-SuiteIsProtected -Name $entry.Name -Manifest $manifest) {
+        Write-Host "  [ext]     Skipped (Protected): $($entry.Name)"
         continue
     }
 

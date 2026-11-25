@@ -68,7 +68,7 @@ foreach ($file in @(Get-ChildItem -Path $SuiteRoot -Recurse -File -Include '*.ps
 # --- 2. Cleanup structure -----------------------------------------------------------
 $expectedCleanups = @(
     @{ Cleanup = 'StartupBloat';      Manifest = 'Manifest.psd1'; Disable = 'Disable-StartupBloat.ps1';             Restore = 'Restore-StartupBloat.ps1';             Protected = @('*DSA*') },
-    @{ Cleanup = 'WindowsSpeedup';    Manifest = 'Manifest.psd1'; Disable = 'Disable-ServicesAndTasks.ps1';       Restore = 'Restore-ServicesAndTasks.ps1';       Protected = @('*DSA*', '*Driver*Support*') },
+    @{ Cleanup = 'WindowsSpeedup';    Manifest = 'Manifest.psd1'; Disable = 'Disable-ServicesAndTasks.ps1';       Restore = 'Restore-ServicesAndTasks.ps1';       Protected = @('*DSA*', '*Driver*Support*', 'WpnUserService*') },
     @{ Cleanup = 'InstalledSoftware'; Manifest = 'Manifest.psd1'; Disable = 'Disable-InstalledSoftware.ps1';      Restore = 'Restore-InstalledSoftware.ps1';      Protected = @('*DSA*', '*Driver*Support*') },
     @{ Cleanup = 'WindowsAI';         Manifest = 'Manifest.psd1'; Disable = 'Disable-WindowsAI.ps1';               Restore = 'Restore-WindowsAI.ps1';               Protected = @('*DSA*', '*Driver*Support*') },
     @{ Cleanup = 'Privacy';           Manifest = 'Manifest.psd1'; Disable = 'Disable-Privacy.ps1';                  Restore = 'Restore-Privacy.ps1';                  Protected = @('*DSA*', '*Driver*Support*') },
@@ -81,7 +81,7 @@ $expectedCleanups = @(
     @{ Cleanup = 'PrivacySettings';   Manifest = 'Manifest.psd1'; Disable = 'Disable-PrivacySettings.ps1';        Restore = 'Restore-PrivacySettings.ps1';        Protected = @('*DSA*', '*Driver*Support*') },
     @{ Cleanup = 'WindowsUpdates';    Manifest = 'Manifest.psd1'; Disable = 'Disable-WindowsUpdates.ps1';         Restore = 'Restore-WindowsUpdates.ps1';         Protected = @('*DSA*', '*Driver*Support*') },
     @{ Cleanup = 'OneDrive';          Manifest = 'Manifest.psd1'; Disable = 'Disable-OneDrive.ps1';               Restore = 'Restore-OneDrive.ps1';               Protected = @('*DSA*', '*Driver*Support*') },
-    @{ Cleanup = 'ExtremeExtras';     Manifest = 'Manifest.psd1'; Disable = 'Disable-ExtremeExtras.ps1';         Restore = 'Restore-ExtremeExtras.ps1';         Protected = @('*DSA*', '*Driver*Support*') }
+    @{ Cleanup = 'ExtremeExtras';     Manifest = 'Manifest.psd1'; Disable = 'Disable-ExtremeExtras.ps1';         Restore = 'Restore-ExtremeExtras.ps1';         Protected = @('*DSA*', '*Driver*Support*', 'WpnUserService*') }
 )
 
 foreach ($expected in $expectedCleanups) {
@@ -639,6 +639,16 @@ Test-SuiteCheck -Name 'StartupBloat: app-internal autorun settings backed up and
 Test-SuiteCheck -Name 'StartupBloat: kDrive autoStart and OneDrive AutoStartEnabled disabled by default' -Pass (
     @($sbManifest.AppAutoStartSettings | Where-Object { $_.Name -eq 'kDrive' -and $_.Kind -eq 'Sqlite' -and $_.Column -eq 'autoStart' -and $_.DisabledValue -eq 0 }).Count -gt 0 -and
     @($sbManifest.AppAutoStartSettings | Where-Object { $_.Name -eq 'OneDrive' -and $_.Kind -eq 'Registry' -and $_.ValueName -eq 'AutoStartEnabled' -and $_.DisabledValue -eq 0 }).Count -gt 0)
+Test-SuiteCheck -Name 'WindowsSpeedup: WpnUserService is protected and no longer disabled' -Pass (
+    @($wsManifestAuto.Services | Where-Object { $_.Name -like 'WpnUserService*' -or $_.NamePattern -like 'WpnUserService*' }).Count -eq 0 -and
+    @($wsManifestAuto.ProtectedPatterns) -contains 'WpnUserService*')
+$extManifest = Import-PowerShellDataFile -Path (Join-Path $SuiteRoot 'Cleanups\ExtremeExtras\Manifest.psd1') -ErrorAction SilentlyContinue
+$extText = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\ExtremeExtras\Disable-ExtremeExtras.ps1') -ErrorAction SilentlyContinue
+Test-SuiteCheck -Name 'ExtremeExtras: WpnUserService is protected and no longer disabled' -Pass (
+    $null -ne $extManifest -and
+    @($extManifest.Services | Where-Object { $_.Name -like 'WpnUserService*' }).Count -eq 0 -and
+    @($extManifest.ProtectedPatterns) -contains 'WpnUserService*' -and
+    $extText.Contains('Test-SuiteIsProtected'))
 
 # 10e. TempAndJunkFiles: Package Cache is not junk; admin-only steps are gated.
 $tjManifest = Get-Content -Raw -Path (Join-Path $SuiteRoot 'Cleanups\TempAndJunkFiles\Manifest.psd1') -ErrorAction SilentlyContinue

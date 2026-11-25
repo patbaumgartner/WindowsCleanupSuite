@@ -8,11 +8,12 @@
     Cleanup           = 'ExtremeExtras'
     Topic             = 'ExtremeExtras'
     Level             = 4
-    Description       = 'Extreme level-4: fully disables push notifications data, app readiness, the Store broker and SMS routing (trade-offs accepted). Requires Administrator.'
-    ProtectedPatterns = @('*DSA*', '*Driver*Support*')
+    Description       = 'Extreme level-4: disables app readiness, the Store broker and SMS routing (trade-offs accepted). Push notifications stay enabled for tray icons. Requires Administrator.'
+    # kDrive 4.0.4 waits for Windows notification registration before creating
+    # its tray icon, so the push-notification user service is never touched.
+    ProtectedPatterns = @('*DSA*', '*Driver*Support*', 'WpnUserService*')
 
     Services = @(
-        @{ Name = 'WpnUserService'; Level = 4; Reason = 'Disable Windows push notification data service (toast/notification back end); do not use before apps are set up' },
         @{ Name = 'AppReadiness'; Level = 4; Reason = 'Disable App Readiness service (extra aggressive app launch readiness)' },
         @{ Name = 'StoreBrokerService'; Level = 4; Reason = 'Disable Windows Store broker (Store background sync/trigger)' },
         @{ Name = 'SmsRouter'; Level = 4; Reason = 'Disable SMS routing service' }

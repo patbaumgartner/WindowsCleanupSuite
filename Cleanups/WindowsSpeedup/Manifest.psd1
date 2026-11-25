@@ -10,7 +10,10 @@
     Description       = 'Disables nonessential Windows services and scheduled tasks to speed up boot and reduce background load.'
     ProtectedPatterns = @(
         '*DSA*',
-        '*Driver*Support*'
+        '*Driver*Support*',
+        # kDrive 4.0.4 waits for Windows notification registration before creating
+        # its tray icon; disabling this per-user service breaks normal launches.
+        'WpnUserService*'
     )
     LoginSafeExclusions = @(
         'csc_vpnagent',
@@ -83,7 +86,6 @@
         @{ Name = 'CtxsDPS'; Reason = 'Citrix Device Posture service (manual unless always required)'; Profile = 'Maximum'; Risky = $true },
         @{ Name = 'CWAUpdaterService'; Reason = 'Citrix Workspace updater service'; Profile = 'Maximum'; Risky = $true },
         @{ Name = 'Killer Network Service'; Reason = 'Killer suite background service (driver still works)'; Profile = 'Maximum' },
-        @{ NamePattern = 'WpnUserService_*'; Reason = 'Windows Push Notifications per-user service (toasts wake apps at logon)'; Profile = 'Maximum'; Risky = $true },
         @{ NamePattern = 'cbdhsvc_*'; Reason = 'Cloud Store background service (OneDrive/Store sync helper)'; Profile = 'Maximum' },
         @{ Name = 'Spooler'; Reason = 'Print Spooler (enable only if you print)'; Profile = 'Maximum'; Risky = $true },
         @{ Name = 'WSearch'; Reason = 'Windows Search indexing service (maximum performance profile)'; Profile = 'Maximum'; Risky = $true },

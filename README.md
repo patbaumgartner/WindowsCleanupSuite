@@ -44,7 +44,7 @@ Walk through:
    - **Safe (Recommended)** — Balanced engine + ServicesTasks, PrivacySettings, Privacy, Browsers, Network, Maintenance, DNS, WindowsUpdates, PowerPlan.
    - **Balanced** — Safe + AI and OneDrive topics (visual effects are part of ServicesTasks).
    - **Aggressive** — Maximum profile: more services set to Manual/Disabled.
-   - **Extreme** — Maximum + ExtremeExtras (WpnUserService, StoreBroker, etc.).
+   - **Extreme** — Maximum + ExtremeExtras (StoreBroker, AppReadiness, etc.; notification services stay on).
 2. **Choose Topics** — toggle the areas you want (spaces/numbers/[a]ll/[n]one, Enter to accept).
 3. **Preview** — see what would change (WhatIf).
 4. **Apply** — System Restore point is created (Admin required), then changes are applied after a typed **YES** confirmation (skipped with `-AutoApprove`). The run aborts if no restore point can be created.
@@ -147,7 +147,7 @@ Individual scripts still work standalone (all cleanups support `-WhatIf`):
 | **Network** | LLMNR off, Delivery Optimization → Manual + `DODownloadMode=0`. Risky (only with `-AllowRisky`): NetBIOS over TCP/IP off per adapter, static DNS 1.1.1.1/8.8.8.8 (per-adapter backup). |
 | **AI** | Copilot/Recall/Click-to-Do, WSAIFabricSvc + AI policies in Edge/Chrome/Paint/Notepad. |
 | **OneDrive** | OneDrive Run entry + startup flag + logon/update tasks; `OneDrive.Sync.Service` → Manual (files stay local, manual launch works). |
-| **ExtremeExtras** (Level 4) | Fully disables `WpnUserService`, `AppReadiness`, `StoreBrokerService`, `SmsRouter`. |
+| **ExtremeExtras** (Level 4) | Disables `AppReadiness`, `StoreBrokerService` and `SmsRouter`; `WpnUserService` is protected so tray icons keep working. |
 | **Maintenance** | Temp/junk files, caches, prefetch, event logs, Disk Cleanup (`cleanmgr`), defrag. |
 | **DNS** | DNS flush, IP stack reset, TCP autotuning + RSS tuning. |
 | **WindowsUpdates** | WU service → Manual, auto-restart off, drivers excluded, DO off. |
@@ -344,7 +344,7 @@ WindowsCleanupSuite/
 - **System Restore point** created automatically on apply (admin required).
 - **Backups** (`Backups\`) keep the ORIGINAL state of every changed item (repeated runs never overwrite them); restore scripts (`Restore-*.ps1`) for each cleanup.
 - **Auto-start only, not removal** — no app is uninstalled and no binary is deleted. Run values, StartupApproved flags, app-internal autorun settings (kDrive `autoStart`, OneDrive `AutoStartEnabled`) and packaged startup tasks are backed up; Startup-folder shortcuts are moved to `Backups\StartupBloat\StartupFolder` and can be restored. Services are set to Manual (never Disabled by these topics), so you can still launch WhatsApp/kDrive/Dropbox/OneDrive yourself. Turning off kDrive's internal `autoStart` matters because kDrive otherwise re-creates its Run value and re-enables the StartupApproved flag on every manual launch; a manual launch still starts the sync engine and tray icon.
-- **kDrive tray icon** — if kDrive is syncing but its tray icon is missing, quit all `kDrive.exe` processes and launch kDrive again. This is a kDrive 4.0.4 GUI startup quirk; with the internal autorun setting disabled the restart does not restore any autorun.
+- **kDrive tray icon** — kDrive 4.0.4 creates its tray icon only after Windows notification registration finishes. Keep `WpnUserService` enabled (Automatic/Manual, never Disabled): disabling it makes a normal Start-menu launch hang before the tray icon appears. If it was previously disabled, sign out and back in once after restoring it, then launch kDrive normally. The internal `autoStart` setting stays off, so this does not restore any autorun.
 - **App-internal autorun settings** — on first apply, kDrive and OneDrive are closed briefly so their `autoStart` / `AutoStartEnabled` settings can be backed up and turned off. Manual launch works normally afterwards.
 - **Reversibility exceptions** (read before applying): junk-file/event-log deletions (`TempAndJunkFiles`) and the `DNSReset` stack reset are **not** restorable; removed **UWP/provisioned apps** are reinstalled from the Microsoft Store, not auto-restored; Win32 apps get their Uninstall registry keys back, not a reinstallation.
 - **No data deletion of important items**: protected patterns (Intel DSA, drivers) are never touched; OneDrive/Dropbox/Teams/PowerToys/TeamViewer remain kept per your needs.
